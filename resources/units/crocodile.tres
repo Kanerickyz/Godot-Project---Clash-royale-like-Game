@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://nrl5fihxrcs8"]
+
+[ext_resource type="Script" uid="uid://fpxuvgsjb6i1" path="res://scripts/data/unit_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://i87fc7wk5tbg" path="res://scripts/data/unit_stats.gd" id="2_stats"]
+[ext_resource type="Resource" uid="uid://cb5hsyd0p0ajc" path="res://resources/abilities/combat_start_damage_last_enemy.tres" id="3_ability"]
+[ext_resource type="Script" uid="uid://crxnpxb4fci0f" path="res://scripts/data/ability_data.gd" id="3_vxjkf"]
+[ext_resource type="Texture2D" uid="uid://cq10tlw7p2fm7" path="res://assets/sprites/units/crocodile.png" id="icon_tex"]
+
+[sub_resource type="Resource" id="UnitStats_crocodile"]
+script = ExtResource("2_stats")
+max_hp = 4
+attack = 8
+
+[resource]
+script = ExtResource("1")
+id = "crocodile"
+display_name = "鳄鱼"
+cost = 5
+tier = 5
+stats = SubResource("UnitStats_crocodile")
+ability = ExtResource("3_ability")
+icon = ExtResource("icon_tex")

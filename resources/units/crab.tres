@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://l3j17thv8fil"]
+
+[ext_resource type="Script" uid="uid://fpxuvgsjb6i1" path="res://scripts/data/unit_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://crxnpxb4fci0f" path="res://scripts/data/ability_data.gd" id="1_grobk"]
+[ext_resource type="Script" uid="uid://i87fc7wk5tbg" path="res://scripts/data/unit_stats.gd" id="2_stats"]
+[ext_resource type="Resource" uid="uid://4n1e8sshblpf" path="res://resources/abilities/combat_start_copy_hp.tres" id="3_ability"]
+[ext_resource type="Texture2D" uid="uid://hv6knmb7uuiu" path="res://assets/sprites/units/crab.png" id="icon_tex"]
+
+[sub_resource type="Resource" id="UnitStats_crab"]
+script = ExtResource("2_stats")
+max_hp = 1
+attack = 4
+
+[resource]
+script = ExtResource("1")
+id = "crab"
+display_name = "螃蟹"
+cost = 2
+tier = 2
+stats = SubResource("UnitStats_crab")
+ability = ExtResource("3_ability")
+icon = ExtResource("icon_tex")

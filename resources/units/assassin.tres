@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://ddvpa3n172j1y"]
+
+[ext_resource type="Script" uid="uid://fpxuvgsjb6i1" path="res://scripts/data/unit_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://i87fc7wk5tbg" path="res://scripts/data/unit_stats.gd" id="2_stats"]
+[ext_resource type="Script" uid="uid://crxnpxb4fci0f" path="res://scripts/data/ability_data.gd" id="3_ab"]
+[ext_resource type="Resource" uid="uid://ddvpa3n0htf1y" path="res://resources/abilities/attack_hit_swap_highest_hp_ally.tres" id="3_ability"]
+
+[sub_resource type="Resource" id="UnitStats_assassin"]
+script = ExtResource("2_stats")
+max_hp = 2
+attack = 2
+movement_pattern = 7
+steps_per_turn = 2
+
+[resource]
+script = ExtResource("1")
+id = "assassin"
+display_name = "刺客"
+cost = 2
+tier = 2
+stats = SubResource("UnitStats_assassin")
+ability = ExtResource("3_ability")

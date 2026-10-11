@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://combatarena01"]
+
+[ext_resource type="Script" path="res://scripts/combat/combat_arena.gd" id="1_arena"]
+[ext_resource type="Script" path="res://scripts/combat/combat_tick_scheduler.gd" id="2_scheduler"]
+
+[node name="CombatArena" type="Node"]
+script = ExtResource("1_arena")
+
+[node name="CombatTickScheduler" type="Node" parent="."]
+script = ExtResource("2_scheduler")
+action_interval = 0.1

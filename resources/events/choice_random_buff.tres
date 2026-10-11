@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="EventChoice" format=3 uid="uid://cex0ua4f1v6vi"]
+
+[ext_resource type="Script" uid="uid://b7fqvx2e4skte" path="res://scripts/data/event_choice.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+label = "随机获得增益（附加到牌库角色）"
+effect_type = 5

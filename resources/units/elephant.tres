@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://pv2wnq6w1g53"]
+
+[ext_resource type="Script" uid="uid://fpxuvgsjb6i1" path="res://scripts/data/unit_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://i87fc7wk5tbg" path="res://scripts/data/unit_stats.gd" id="2_stats"]
+[ext_resource type="Script" uid="uid://crxnpxb4fci0f" path="res://scripts/data/ability_data.gd" id="3_ab"]
+[ext_resource type="Resource" uid="uid://bl0q7ahixea03" path="res://resources/abilities/hurt_gain_attack_elephant.tres" id="3_ability"]
+[ext_resource type="Texture2D" uid="uid://dgvcarttv4r87" path="res://assets/sprites/bishop_head.png" id="4_head"]
+[ext_resource type="Texture2D" uid="uid://cpc4qrhc6appr" path="res://assets/sprites/bishop_body.png" id="5_body"]
+
+[sub_resource type="Resource" id="UnitStats_elephant"]
+script = ExtResource("2_stats")
+max_hp = 4
+movement_pattern = 5
+
+[resource]
+script = ExtResource("1")
+id = "elephant"
+display_name = "象"
+cost = 3
+tier = 3
+stats = SubResource("UnitStats_elephant")
+ability = ExtResource("3_ability")
+portrait_head = ExtResource("4_head")
+portrait_body = ExtResource("5_body")

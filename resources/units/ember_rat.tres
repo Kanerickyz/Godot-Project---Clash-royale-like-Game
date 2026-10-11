@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://ddjg5mlmw6bxu"]
+
+[ext_resource type="Script" uid="uid://fpxuvgsjb6i1" path="res://scripts/data/unit_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://i87fc7wk5tbg" path="res://scripts/data/unit_stats.gd" id="2_stats"]
+[ext_resource type="Resource" uid="uid://ce4bi14dkcl4u" path="res://resources/abilities/faint_apply_burn_around.tres" id="3_ability"]
+[ext_resource type="Script" uid="uid://crxnpxb4fci0f" path="res://scripts/data/ability_data.gd" id="3_s70mr"]
+[ext_resource type="Texture2D" uid="uid://dt2ow0t00qmd1" path="res://assets/sprites/units/ember_rat.png" id="icon_tex"]
+
+[sub_resource type="Resource" id="UnitStats_ember_rat"]
+script = ExtResource("2_stats")
+max_hp = 3
+attack = 2
+
+[resource]
+script = ExtResource("1")
+id = "ember_rat"
+display_name = "余烬鼠"
+cost = 3
+tier = 3
+stats = SubResource("UnitStats_ember_rat")
+ability = ExtResource("3_ability")
+icon = ExtResource("icon_tex")

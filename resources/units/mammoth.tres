@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://dj3c765cb7jok"]
+
+[ext_resource type="Script" uid="uid://fpxuvgsjb6i1" path="res://scripts/data/unit_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://i87fc7wk5tbg" path="res://scripts/data/unit_stats.gd" id="2_stats"]
+[ext_resource type="Resource" uid="uid://cagrj0ifapnap" path="res://resources/abilities/faint_buff_all_allies.tres" id="3_ability"]
+[ext_resource type="Script" uid="uid://crxnpxb4fci0f" path="res://scripts/data/ability_data.gd" id="3_ai38n"]
+[ext_resource type="Texture2D" uid="uid://qhtsggib8uu7" path="res://assets/sprites/units/mammoth.png" id="icon_tex"]
+
+[sub_resource type="Resource" id="UnitStats_mammoth"]
+script = ExtResource("2_stats")
+max_hp = 12
+attack = 4
+
+[resource]
+script = ExtResource("1")
+id = "mammoth"
+display_name = "猛犸"
+cost = 6
+tier = 6
+stats = SubResource("UnitStats_mammoth")
+ability = ExtResource("3_ability")
+icon = ExtResource("icon_tex")

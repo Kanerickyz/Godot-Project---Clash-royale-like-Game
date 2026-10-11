@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="AbilityData" format=3 uid="uid://ddvpa3n0htf1y"]
+
+[ext_resource type="Script" uid="uid://crxnpxb4fci0f" path="res://scripts/data/ability_data.gd" id="1_ab"]
+[ext_resource type="Script" uid="uid://bgp64ty0hqbey" path="res://scripts/data/effect_spec.gd" id="2_spec"]
+[ext_resource type="Script" uid="uid://bhmtkvq6m1e37" path="res://scripts/data/effect_action.gd" id="3_act"]
+
+[sub_resource type="Resource" id="Resource_act_swap"]
+script = ExtResource("3_act")
+action_type = 11
+
+[sub_resource type="Resource" id="Resource_spec"]
+script = ExtResource("2_spec")
+trigger = &"OnAttackHit"
+target_selector = 15
+exclude_owner = true
+actions = Array[ExtResource("3_act")]([SubResource("Resource_act_swap")])
+
+[resource]
+script = ExtResource("1_ab")
+id = "attack_hit_swap_highest_hp_ally"
+display_name = "受击前 与当前血量最高的其他队友换位"
+effect_specs = Array[ExtResource("2_spec")]([SubResource("Resource_spec")])

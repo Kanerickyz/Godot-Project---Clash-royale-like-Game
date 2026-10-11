@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://cbjv0w1n2f0ch"]
+
+[ext_resource type="Script" uid="uid://fpxuvgsjb6i1" path="res://scripts/data/unit_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://i87fc7wk5tbg" path="res://scripts/data/unit_stats.gd" id="2_stats"]
+[ext_resource type="Script" uid="uid://crxnpxb4fci0f" path="res://scripts/data/ability_data.gd" id="2_yt6id"]
+[ext_resource type="Resource" uid="uid://c2g5xbluvk1p7" path="res://resources/abilities/faint_summon_cricket.tres" id="3_ability"]
+[ext_resource type="Texture2D" uid="uid://muexxqtqgy1r" path="res://assets/sprites/units/cricket.png" id="icon_tex"]
+
+[sub_resource type="Resource" id="UnitStats_cricket"]
+script = ExtResource("2_stats")
+max_hp = 3
+attack = 1
+
+[resource]
+script = ExtResource("1")
+id = "cricket"
+display_name = "蟋蟀"
+stats = SubResource("UnitStats_cricket")
+ability = ExtResource("3_ability")
+icon = ExtResource("icon_tex")

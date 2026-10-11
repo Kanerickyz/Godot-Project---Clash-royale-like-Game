@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="AbilityData" format=3 uid="uid://ddb5m5wq2ldqs"]
+
+[ext_resource type="Script" uid="uid://crxnpxb4fci0f" path="res://scripts/data/ability_data.gd" id="1_ab"]
+[ext_resource type="Script" uid="uid://bgp64ty0hqbey" path="res://scripts/data/effect_spec.gd" id="1_hlolu"]
+
+[resource]
+script = ExtResource("1_ab")
+id = "placeholder_sell_shop_hp"
+display_name = "出售时 商店角色 +1 生命上限（商店阶段待实现）"

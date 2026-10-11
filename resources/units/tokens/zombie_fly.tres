@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://dh4lgwraw3vjh"]
+
+[ext_resource type="Script" uid="uid://fpxuvgsjb6i1" path="res://scripts/data/unit_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://crxnpxb4fci0f" path="res://scripts/data/ability_data.gd" id="2_fhdem"]
+[ext_resource type="Script" uid="uid://i87fc7wk5tbg" path="res://scripts/data/unit_stats.gd" id="2_stats"]
+[ext_resource type="Texture2D" uid="uid://chxt4j0hkc8hk" path="res://assets/sprites/units/zombie_fly.png" id="icon_tex"]
+
+[sub_resource type="Resource" id="UnitStats_zombie_fly"]
+script = ExtResource("2_stats")
+max_hp = 4
+attack = 4
+
+[resource]
+script = ExtResource("1")
+id = "zombie_fly"
+display_name = "僵尸蝇"
+stats = SubResource("UnitStats_zombie_fly")
+icon = ExtResource("icon_tex")

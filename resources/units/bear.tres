@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://b2pt52mpdyehm"]
+
+[ext_resource type="Script" uid="uid://fpxuvgsjb6i1" path="res://scripts/data/unit_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://crxnpxb4fci0f" path="res://scripts/data/ability_data.gd" id="1_5qgqi"]
+[ext_resource type="Script" uid="uid://i87fc7wk5tbg" path="res://scripts/data/unit_stats.gd" id="2_stats"]
+[ext_resource type="Resource" uid="uid://wuomv4iaoel6" path="res://resources/abilities/hurt_gain_max_hp.tres" id="3_ability"]
+[ext_resource type="Texture2D" uid="uid://bh13o3y4gpv4q" path="res://assets/sprites/units/bear.png" id="icon_tex"]
+
+[sub_resource type="Resource" id="UnitStats_bear"]
+script = ExtResource("2_stats")
+max_hp = 5
+attack = 1
+
+[resource]
+script = ExtResource("1")
+id = "bear"
+display_name = "熊"
+cost = 3
+tier = 3
+stats = SubResource("UnitStats_bear")
+ability = ExtResource("3_ability")
+icon = ExtResource("icon_tex")

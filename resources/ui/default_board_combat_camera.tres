@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="BoardCombatCameraConfig" format=3 uid="uid://baagino4t30jo"]
+
+[ext_resource type="Script" uid="uid://cq4q7t60tr35o" path="res://scripts/ui/board_3d/board_combat_camera_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+combat_elevation_deg = 30.0
+ortho_size_multiplier = 2.5

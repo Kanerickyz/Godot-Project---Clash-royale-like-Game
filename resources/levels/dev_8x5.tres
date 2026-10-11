@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="LevelData" format=3 uid="uid://devlevel8x5"]
+
+[ext_resource type="Script" path="res://scripts/data/level_data.gd" id="1_level"]
+
+[resource]
+script = ExtResource("1_level")
+board_width = 8
+board_height = 5
+blocked_cells = []

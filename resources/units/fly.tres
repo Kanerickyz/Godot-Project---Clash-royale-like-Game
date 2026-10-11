@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://ccs5wycrguue0"]
+
+[ext_resource type="Script" uid="uid://fpxuvgsjb6i1" path="res://scripts/data/unit_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://i87fc7wk5tbg" path="res://scripts/data/unit_stats.gd" id="2_stats"]
+[ext_resource type="Script" uid="uid://crxnpxb4fci0f" path="res://scripts/data/ability_data.gd" id="3_5k6qy"]
+[ext_resource type="Resource" uid="uid://bacb7a61jdo63" path="res://resources/abilities/friend_death_summon_zombie_fly.tres" id="3_ability"]
+[ext_resource type="Texture2D" uid="uid://bvc38unisw2uu" path="res://assets/sprites/units/fly.png" id="icon_tex"]
+
+[sub_resource type="Resource" id="UnitStats_fly"]
+script = ExtResource("2_stats")
+max_hp = 5
+attack = 5
+
+[resource]
+script = ExtResource("1")
+id = "fly"
+display_name = "苍蝇"
+cost = 6
+tier = 6
+stats = SubResource("UnitStats_fly")
+ability = ExtResource("3_ability")
+icon = ExtResource("icon_tex")

@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="BuffCardData" format=3 uid="uid://c66xctd6ooo6m"]
+
+[ext_resource type="Script" uid="uid://c2gjlifbpdq43" path="res://scripts/data/buff_card_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "buff_pear_atk"
+display_name = "梨（攻击）"
+tier = 4
+shop_cost = 4
+value = 2

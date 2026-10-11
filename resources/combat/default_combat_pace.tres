@@ -1,0 +1,6 @@
+[gd_resource type="Resource" script_class="CombatPaceConfig" format=3 uid="uid://duu4tra4eylcq"]
+
+[ext_resource type="Script" uid="uid://1rvsrc8f8oao" path="res://scripts/data/combat_pace_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")

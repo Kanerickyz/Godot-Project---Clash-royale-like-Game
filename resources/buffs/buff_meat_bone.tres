@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="BuffCardData" format=3 uid="uid://b64cdjn6tvp1j"]
+
+[ext_resource type="Script" uid="uid://c2gjlifbpdq43" path="res://scripts/data/buff_card_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "buff_meat_bone"
+display_name = "肉骨"
+tier = 2
+shop_cost = 2
+value = 3

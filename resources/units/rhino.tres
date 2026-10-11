@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://dqf1i5a5tx52x"]
+
+[ext_resource type="Script" uid="uid://fpxuvgsjb6i1" path="res://scripts/data/unit_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://i87fc7wk5tbg" path="res://scripts/data/unit_stats.gd" id="2_stats"]
+[ext_resource type="Resource" uid="uid://dutgcl6hqpsqx" path="res://resources/abilities/knockout_damage_first_enemy.tres" id="3_ability"]
+[ext_resource type="Script" uid="uid://crxnpxb4fci0f" path="res://scripts/data/ability_data.gd" id="3_owign"]
+[ext_resource type="Texture2D" uid="uid://kn8bti12b3cp" path="res://assets/sprites/units/rhino.png" id="icon_tex"]
+
+[sub_resource type="Resource" id="UnitStats_rhino"]
+script = ExtResource("2_stats")
+max_hp = 9
+attack = 6
+
+[resource]
+script = ExtResource("1")
+id = "rhino"
+display_name = "犀牛"
+cost = 5
+tier = 5
+stats = SubResource("UnitStats_rhino")
+ability = ExtResource("3_ability")
+icon = ExtResource("icon_tex")

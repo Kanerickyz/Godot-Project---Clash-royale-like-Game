@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://3eidwjh1xk24"]
+
+[ext_resource type="Script" uid="uid://fpxuvgsjb6i1" path="res://scripts/data/unit_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://crxnpxb4fci0f" path="res://scripts/data/ability_data.gd" id="2_bafd4"]
+[ext_resource type="Script" uid="uid://i87fc7wk5tbg" path="res://scripts/data/unit_stats.gd" id="2_stats"]
+[ext_resource type="Texture2D" uid="uid://688f8x40josg" path="res://assets/sprites/units/chick.png" id="icon_tex"]
+
+[sub_resource type="Resource" id="UnitStats_chick"]
+script = ExtResource("2_stats")
+max_hp = 1
+
+[resource]
+script = ExtResource("1")
+id = "chick"
+display_name = "小鸡"
+stats = SubResource("UnitStats_chick")
+icon = ExtResource("icon_tex")

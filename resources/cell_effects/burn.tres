@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="CellEffectData" format=3 uid="uid://ik2p36bexh8x"]
+
+[ext_resource type="Script" uid="uid://bg2ql03m6gyno" path="res://scripts/data/cell_effect_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "burn"
+display_name = "燃烧"

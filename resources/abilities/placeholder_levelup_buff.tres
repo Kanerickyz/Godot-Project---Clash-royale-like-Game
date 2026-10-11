@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="AbilityData" format=3 uid="uid://xk8vky3mjiad"]
+
+[ext_resource type="Script" uid="uid://crxnpxb4fci0f" path="res://scripts/data/ability_data.gd" id="1_ab"]
+[ext_resource type="Script" uid="uid://bgp64ty0hqbey" path="res://scripts/data/effect_spec.gd" id="1_mjnfu"]
+
+[resource]
+script = ExtResource("1_ab")
+id = "placeholder_levelup_buff"
+display_name = "升级时 对两名队友 +1 攻击与 +1 生命上限（商店阶段待实现）"

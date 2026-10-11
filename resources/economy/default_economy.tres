@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="EconomyConfig" format=3 uid="uid://jetph8r717cv"]
+
+[ext_resource type="Script" uid="uid://bj87y26axlww5" path="res://scripts/data/economy_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+starting_gold = 8
+default_wave_gold = 2

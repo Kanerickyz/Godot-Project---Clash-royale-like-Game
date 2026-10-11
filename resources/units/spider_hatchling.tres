@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://dlgw2fsrmf78i"]
+
+[ext_resource type="Script" uid="uid://fpxuvgsjb6i1" path="res://scripts/data/unit_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://crxnpxb4fci0f" path="res://scripts/data/ability_data.gd" id="1_k3qyu"]
+[ext_resource type="Script" uid="uid://i87fc7wk5tbg" path="res://scripts/data/unit_stats.gd" id="2_stats"]
+[ext_resource type="Texture2D" uid="uid://jt272u8ftw6y" path="res://assets/sprites/units/spider_hatchling.png" id="icon_tex"]
+
+[sub_resource type="Resource" id="UnitStats_spider_hatchling"]
+script = ExtResource("2_stats")
+max_hp = 2
+attack = 2
+
+[resource]
+script = ExtResource("1")
+id = "spider_hatchling"
+display_name = "幼蛛"
+stats = SubResource("UnitStats_spider_hatchling")
+icon = ExtResource("icon_tex")

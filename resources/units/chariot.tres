@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://bqx7chariot01"]
+
+[ext_resource type="Script" uid="uid://fpxuvgsjb6i1" path="res://scripts/data/unit_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://i87fc7wk5tbg" path="res://scripts/data/unit_stats.gd" id="2_stats"]
+[ext_resource type="Script" uid="uid://crxnpxb4fci0f" path="res://scripts/data/ability_data.gd" id="3_ab"]
+[ext_resource type="Resource" uid="uid://c8moveahead01" path="res://resources/abilities/move_damage_enemy_ahead.tres" id="3_ability"]
+[ext_resource type="Texture2D" uid="uid://8dds2c044woq" path="res://assets/sprites/rook_head.png" id="4_head"]
+[ext_resource type="Texture2D" uid="uid://ckn5w5y53s4r4" path="res://assets/sprites/rook_body.png" id="5_body"]
+
+[sub_resource type="Resource" id="UnitStats_chariot"]
+script = ExtResource("2_stats")
+max_hp = 3
+attack = 4
+movement_pattern = 2
+
+[resource]
+script = ExtResource("1")
+id = "chariot"
+display_name = "战车"
+cost = 2
+tier = 2
+stats = SubResource("UnitStats_chariot")
+ability = ExtResource("3_ability")
+portrait_head = ExtResource("4_head")
+portrait_body = ExtResource("5_body")

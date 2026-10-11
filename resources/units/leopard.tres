@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://cd4e72tge6yuh"]
+
+[ext_resource type="Script" uid="uid://fpxuvgsjb6i1" path="res://scripts/data/unit_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://crxnpxb4fci0f" path="res://scripts/data/ability_data.gd" id="1_n58d8"]
+[ext_resource type="Script" uid="uid://i87fc7wk5tbg" path="res://scripts/data/unit_stats.gd" id="2_stats"]
+[ext_resource type="Resource" uid="uid://d3nxe2el1rotn" path="res://resources/abilities/combat_start_attack_random_enemy.tres" id="3_ability"]
+[ext_resource type="Texture2D" uid="uid://cpbhnedc5pk0r" path="res://assets/sprites/units/leopard.png" id="icon_tex"]
+
+[sub_resource type="Resource" id="UnitStats_leopard"]
+script = ExtResource("2_stats")
+max_hp = 1
+attack = 10
+
+[resource]
+script = ExtResource("1")
+id = "leopard"
+display_name = "豹"
+cost = 4
+tier = 4
+stats = SubResource("UnitStats_leopard")
+ability = ExtResource("3_ability")
+icon = ExtResource("icon_tex")

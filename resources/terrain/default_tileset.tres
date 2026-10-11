@@ -1,0 +1,56 @@
+[gd_resource type="Resource" script_class="TerrainTileset" format=3 uid="uid://dw0iat8bd3ypw"]
+
+[ext_resource type="Script" uid="uid://dogvhdjphax8" path="res://scripts/data/terrain_tileset.gd" id="1_tileset"]
+[ext_resource type="Script" uid="uid://qhj7aj1re8hx" path="res://scripts/data/terrain_tile.gd" id="2_tile"]
+
+[sub_resource type="Resource" id="tile_grass"]
+script = ExtResource("2_tile")
+weight = 10.0
+compatible = Array[int]([0, 3, 1, 4])
+
+[sub_resource type="Resource" id="tile_jungle"]
+script = ExtResource("2_tile")
+type = 1
+display_name = "丛林"
+weight = 5.0
+color = Color(0.18, 0.49, 0.196, 1)
+compatible = Array[int]([1, 0, 5])
+
+[sub_resource type="Resource" id="tile_lake"]
+script = ExtResource("2_tile")
+type = 2
+display_name = "湖泊"
+walkable = false
+weight = 3.0
+color = Color(0.098, 0.463, 0.824, 1)
+compatible = Array[int]([2, 3])
+
+[sub_resource type="Resource" id="tile_shore"]
+script = ExtResource("2_tile")
+type = 3
+display_name = "岸边"
+weight = 4.0
+color = Color(1, 0.878, 0.51, 1)
+compatible = Array[int]([3, 0, 2, 4])
+
+[sub_resource type="Resource" id="tile_rock"]
+script = ExtResource("2_tile")
+type = 4
+display_name = "岩石"
+walkable = false
+weight = 1.5
+color = Color(0.471, 0.565, 0.612, 1)
+compatible = Array[int]([0, 3])
+
+[sub_resource type="Resource" id="tile_dense"]
+script = ExtResource("2_tile")
+type = 5
+display_name = "密林"
+walkable = false
+weight = 1.5
+color = Color(0.106, 0.369, 0.125, 1)
+compatible = Array[int]([1, 5])
+
+[resource]
+script = ExtResource("1_tileset")
+tiles = Array[ExtResource("2_tile")]([SubResource("tile_grass"), SubResource("tile_jungle"), SubResource("tile_lake"), SubResource("tile_shore"), SubResource("tile_rock"), SubResource("tile_dense")])

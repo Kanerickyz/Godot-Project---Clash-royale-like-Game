@@ -1,0 +1,63 @@
+[gd_scene format=3 uid="uid://bos13k2qfjdd5"]
+
+[ext_resource type="Script" path="res://scripts/ui/unit_tooltip.gd" id="1_script"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_tooltip"]
+bg_color = Color(0.1, 0.12, 0.16, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.35, 0.42, 0.55, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+content_margin_left = 12.0
+content_margin_top = 10.0
+content_margin_right = 12.0
+content_margin_bottom = 10.0
+
+[node name="UnitTooltip" type="PanelContainer"]
+custom_minimum_size = Vector2(360, 0)
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_tooltip")
+script = ExtResource("1_script")
+
+[node name="Content" type="HBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="CardHost" type="Control" parent="Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 140)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="TextBox" type="VBoxContainer" parent="Content"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="NameLabel" type="Label" parent="Content/TextBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "单位名称"
+
+[node name="StatsLabel" type="Label" parent="Content/TextBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.82, 0.86, 0.92, 1)
+theme_override_font_sizes/font_size = 12
+text = "属性"
+
+[node name="SkillsLabel" type="Label" parent="Content/TextBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.82, 0.86, 0.92, 1)
+theme_override_font_sizes/font_size = 12
+text = "技能详情"
+autowrap_mode = 3

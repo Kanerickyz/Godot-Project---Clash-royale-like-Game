@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://d2cx44oxlo05q"]
+
+[ext_resource type="Script" uid="uid://fpxuvgsjb6i1" path="res://scripts/data/unit_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://i87fc7wk5tbg" path="res://scripts/data/unit_stats.gd" id="2_stats"]
+[ext_resource type="Resource" uid="uid://00tufeocmsoy" path="res://resources/abilities/hurt_buff_ally_behind.tres" id="3_ability"]
+[ext_resource type="Script" uid="uid://crxnpxb4fci0f" path="res://scripts/data/ability_data.gd" id="3_f70bc"]
+[ext_resource type="Texture2D" uid="uid://dpm2wlwr14k4c" path="res://assets/sprites/units/camel.png" id="icon_tex"]
+
+[sub_resource type="Resource" id="UnitStats_camel"]
+script = ExtResource("2_stats")
+max_hp = 4
+
+[resource]
+script = ExtResource("1")
+id = "camel"
+display_name = "骆驼"
+cost = 3
+tier = 3
+stats = SubResource("UnitStats_camel")
+ability = ExtResource("3_ability")
+icon = ExtResource("icon_tex")

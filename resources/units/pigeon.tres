@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://ilc88krm0bu8"]
+
+[ext_resource type="Script" uid="uid://fpxuvgsjb6i1" path="res://scripts/data/unit_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://i87fc7wk5tbg" path="res://scripts/data/unit_stats.gd" id="2_stats"]
+[ext_resource type="Script" uid="uid://crxnpxb4fci0f" path="res://scripts/data/ability_data.gd" id="3_67tdj"]
+[ext_resource type="Resource" uid="uid://o4j0d7k5f0th" path="res://resources/abilities/sell_stock_breadcrumbs.tres" id="3_ability"]
+[ext_resource type="Texture2D" uid="uid://dd2ust7ih7ena" path="res://assets/sprites/units/pigeon.png" id="icon_tex"]
+
+[sub_resource type="Resource" id="UnitStats_pigeon"]
+script = ExtResource("2_stats")
+max_hp = 1
+
+[resource]
+script = ExtResource("1")
+id = "pigeon"
+display_name = "鸽子"
+stats = SubResource("UnitStats_pigeon")
+ability = ExtResource("3_ability")
+icon = ExtResource("icon_tex")

@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="AbilityData" format=3 uid="uid://cyy2bewayle5p"]
+
+[ext_resource type="Script" uid="uid://bgp64ty0hqbey" path="res://scripts/data/effect_spec.gd" id="1_0aoja"]
+[ext_resource type="Script" uid="uid://crxnpxb4fci0f" path="res://scripts/data/ability_data.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = "placeholder_faint_aoe"
+display_name = "死亡时 对全场造成 2 点伤害（待实现）"

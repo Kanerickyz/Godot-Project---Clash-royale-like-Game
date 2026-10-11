@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://cpxm5wbhx1kfq"]
+
+[ext_resource type="Script" uid="uid://fpxuvgsjb6i1" path="res://scripts/data/unit_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://i87fc7wk5tbg" path="res://scripts/data/unit_stats.gd" id="2_stats"]
+[ext_resource type="Script" uid="uid://crxnpxb4fci0f" path="res://scripts/data/ability_data.gd" id="3_22tvx"]
+[ext_resource type="Resource" uid="uid://dvwsigyfoov54" path="res://resources/abilities/friend_summoned_buff_atk_hp.tres" id="3_ability"]
+[ext_resource type="Texture2D" uid="uid://7ooq13i82yob" path="res://assets/sprites/units/turkey.png" id="icon_tex"]
+
+[sub_resource type="Resource" id="UnitStats_turkey"]
+script = ExtResource("2_stats")
+max_hp = 4
+
+[resource]
+script = ExtResource("1")
+id = "turkey"
+display_name = "火鸡"
+cost = 5
+tier = 5
+stats = SubResource("UnitStats_turkey")
+ability = ExtResource("3_ability")
+icon = ExtResource("icon_tex")
