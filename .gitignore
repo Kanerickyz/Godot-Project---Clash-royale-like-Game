@@ -2,8 +2,8 @@
 .godot/
 /android/
 
-# Local editor
-.cursor/
+# Local validation artifacts
+.artifacts/
 
 # Python
 __pycache__/

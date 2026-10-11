@@ -1,12 +1,13 @@
 # Project Autochess — 文档索引
 
-> 小动物 2D PvE 自走棋（构筑 + 流派联动 + 波次刷怪）· Godot 4.6 · 最后更新：2026-06-02
+> 小动物 2D PvE 自走棋（构筑 + 流派联动 + 波次刷怪）· Godot 4.6 · 最后更新：2026-10-11
 
 ## 快速导航
 
 | 文档 | 说明 |
 |------|------|
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | 当前工程状态、推荐目录树、核心系统划分 |
+| [DEVELOPMENT_WORKFLOW.md](./DEVELOPMENT_WORKFLOW.md) | Agent 职责、纵切片流程、L0–L5 阶段 |
 | [GAME_VISION.md](./GAME_VISION.md) | PvE 构筑、**流派 / 联动技能**、关卡棋盘、刷怪、里程碑 |
 | [SHOP_SYSTEM.md](./SHOP_SYSTEM.md) | **商店 / 牌库 / Tier**（M3b + 增益商店已实现） |
 | [BUFF_SYSTEM.md](./BUFF_SYSTEM.md) | **增益卡**规格、示例、附加流（文档目标） |
@@ -129,6 +130,10 @@ Project Autochess/
 | Effect / Synergy | `EffectResolver` + `EffectSpec` + 3 样本技能 | ARCHITECTURE §3.7 · **M3.5** |
 | Units & Abilities | 单位数据、星级、`AbilityData` | ARCHITECTURE §3.5 |
 | UI Layer | 与逻辑解耦的界面 | ARCHITECTURE §3.6 |
+
+## 协作入口
+
+项目规则在根目录 [AGENTS.md](../AGENTS.md)，代码与 Godot 规范在 [CONTRIBUTING.md](../CONTRIBUTING.md)。Cursor 角色、规则和技能在 `.cursor/`。
 
 ## 维护说明
 

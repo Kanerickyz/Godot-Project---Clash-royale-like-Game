@@ -1,0 +1,8 @@
+---
+description: Project Autochess 事实来源、范围和协作入口
+alwaysApply: true
+---
+
+阅读并遵守根 AGENTS.md，它是项目规则的统一来源。
+项目介绍见 Documents/INDEX.md，开发规范见 CONTRIBUTING.md，交接流程见 Documents/DEVELOPMENT_WORKFLOW.md。
+不要把 ABILITY_PROPOSALS 或愿景里未决条款当成实装，v1 不做羁绊。
