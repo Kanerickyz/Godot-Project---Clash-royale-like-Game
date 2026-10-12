@@ -89,6 +89,8 @@ flowchart TB
 
 **微观 Match**（`MatchStateMachine`）：单次遭遇内 `SHOP | PREPARE → COMBAT → RESOLVE`；`current_encounter: EncounterData` 替代线性 `LevelData.waves`。
 
+胜负对齐 [GAME_VISION.md](./GAME_VISION.md)【设计定稿】：清空全部敌人 → 胜；己方全灭 → 败；v1 不以基地 HP 为胜负主轴。
+
 ```mermaid
 flowchart TD
     Map[MAP] -->|战斗节点| Prep[PREPARE] --> Combat[COMBAT] --> Resolve[RESOLVE] --> Map
@@ -120,7 +122,7 @@ LEVEL_LOAD → PREPARE（布阵）→ COMBAT（刷怪 + 自动战斗）→ RESOL
 | 1 进入波次 | PREPARE 入口 | `wave_index` 指向即将战斗的 `WaveData` |
 | 2 准备 | PREPARE | 手牌展示牌库条目并选择放置（抽 5 To-Be）；首波前商店已在关卡加载时 roll |
 | 3 战斗 | COMBAT | 击杀即时掉金；`CombatEventBus` 于开战创建、战后 `stop_combat` 销毁 |
-| 4 结算 | RESOLVE | 发放 `WaveData.wave_gold_reward`；清敌人；**不得**直接开下一场战斗 |
+| 4 结算 | RESOLVE | 发放 `WaveData.wave_gold_reward`；清敌人；胜负按愿景清波制（敌方全灭胜 / 己方全灭败）；**不得**直接开下一场战斗 |
 | 5 商店 | PREPARE（结算后） | 购买角色卡/增益卡（文档目标；代码仍为技能卡）；RESOLVE 点「继续构筑」→ PREPARE + `roll_shop()` |
 | 6 下一波 | PREPARE → COMBAT | 玩家手动点「开始第 N 波」 |
 
@@ -238,7 +240,7 @@ extends Resource
 - To-Be 弹窗：`DeckReplaceModal`、`BuffAttachModal`（由 `SkillAttachModal` 迁移，见 SHOP_SYSTEM）
 - UI 只调用 **Service / Facade**（如 `MatchFacade.buy_unit(slot)`），不直接改棋盘数组
 - 单位 tooltip：展示联动技能说明（`EffectSpec` 的 `@export_multiline` 描述或自动生成）
-- 主题：`Theme` 资源统一字体与颜色（小动物风格偏明亮、圆角）
+- 主题：`Theme` 资源统一字体与颜色（中世纪幻想：偏石材/羊皮纸/金属色；可读优先。【设定定稿 / UI Theme 待迁移】）
 
 ### 3.7 战斗事件与效果系统
 
