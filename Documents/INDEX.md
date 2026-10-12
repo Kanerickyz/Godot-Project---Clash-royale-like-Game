@@ -9,7 +9,7 @@
 | 文档 | 说明 |
 |------|------|
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | 当前工程状态、推荐目录树、核心系统划分 |
-| [DEVELOPMENT_WORKFLOW.md](./DEVELOPMENT_WORKFLOW.md) | Agent 职责、纵切片流程、L0–L5 阶段 |
+| [DEVELOPMENT_WORKFLOW.md](./DEVELOPMENT_WORKFLOW.md) | Agent 职责、纵切片流程、L0–L5、**轻量/完全验收** |
 | [GAME_VISION.md](./GAME_VISION.md) | 主循环（cycle/人口）、**清波胜负**、单局时长、流派联动、棋盘与敌压 |
 | [Features/UNITS.md](./Features/UNITS.md) | **角色单位**（友方角色 / 敌方角色 / 生成的代理角色；角色等级与生命、攻击、移动；功能与数值分离） |
 | [Features/GAME_LOOP.md](./Features/GAME_LOOP.md) | **游戏基础循环**（局外 / 一整局地图 / 节点内自走棋；主模式 vs 线性工具环） |
@@ -61,8 +61,8 @@ Project Autochess/
 | 路径 | 职责 | 状态 |
 |------|------|------|
 | `scenes/main/main.tscn` | 对局根场景、Camera2D | **M1 已实现** |
-| `scenes/_legacy/ui/board_view.tscn` | 旧 2D 棋盘（非热路径） | **Legacy** |
-| `scenes/ui/board_world.tscn` | 3D 棋盘世界（主路径） | **已实现** |
+| `scenes/_legacy/ui/board_view.tscn` | 旧 2D 棋盘（非热路径，无玩家切换入口） | **Legacy** |
+| `scenes/ui/board_world.tscn` | 3D 战场（主路径；无 2D/3D 切换） | **已实现** |
 | `scenes/ui/board_cell.tscn` | 格子 Area2D | **M1 已实现** |
 | `scenes/units/placeholder_unit.tscn` | 占位单位视觉 | **M1 已实现** |
 | `scripts/core/board_grid.gd` | 格占用、`get_empty_cells` | **M1 已实现** |
