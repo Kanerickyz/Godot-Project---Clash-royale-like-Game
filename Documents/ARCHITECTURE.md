@@ -6,6 +6,8 @@
 
 截至文档编写时，仓库为 **Godot 4.6 工程（M2a–M3 已可运行）**：
 
+- **实时战斗（Run 主路径）**：`scenes/combat/realtime/realtime_battle.tscn` + `RealtimeBattleController`；2D 俯视竖屏 18×32，格子只用于投放吸附与半场；开战后 `RealtimeCombatSim` 以固定步长（1/30 秒）在连续坐标上推进移动、攻击、投射物、溅射与推挤（见 §3.4）。角色为 `resources/units/realtime/`（皇室战争式基础单兵占位，无主技能）；地图非战斗节点为占位界面 `scenes/ui/placeholder/`
+- **旧网格工具环**：以下 M1–M2 回合制格子战斗、3D `BoardWorld` 仍用于 `main.tscn` 线性开发关与沙盒，不再是 Run 主路径
 - **M1**：可变棋盘、玩家布阵
 - **M2a–M2c**：`UnitData` / `WaveData`、`SpawnSystem`、`GridMovement`、回合制逐单位行动战斗、`CombatArena` + `CombatEventBus` + `DamagePipeline` + `UnitBrain`、`MatchStateMachine` 多波循环（dev 关卡 **15 波**，通关后循环）
 - **M3.5 Effect**：`EffectSpec` / `EffectAction` / `AbilityData`、`EffectResolver`、`StatModifierStack`；样本：受伤+2攻、死亡召唤2HP、移动+1血
@@ -104,7 +106,7 @@ flowchart TD
 | `RunMapConfig` | `scripts/data/run_map_config.gd` | Act 地图模板、遭遇池、事件池 |
 | `MapGenerator` | `scripts/core/run/map_generator.gd` |  procedural 地图 + 节点类型 |
 | `RunController` | `scripts/core/run/run_controller.gd` | Run 生命周期、选路 |
-| `RunGameController` | `scripts/core/run/run_game_controller.gd` | 场景编排：地图 UI ↔ BoardController |
+| `RunGameController` | `scripts/core/run/run_game_controller.gd` | 场景编排：地图 UI ↔ `RealtimeBattleController`（战斗节点）/ 占位界面（其他节点）；持有本局 `DeckState`、`RunEconomy`。`BoardController` 的 run 模式为遗留、无调用方 |
 | `EncounterData` | `scripts/data/encounter_data.gd` | 单节点战斗：`WaveData` + 棋盘覆盖 |
 
 **线性开发关**（`BoardController.linear_dev_mode`）：仍用 `LevelData.waves` 顺序推进，每波战后商店。
@@ -121,7 +123,7 @@ LEVEL_LOAD → PREPARE（布阵）→ COMBAT（刷怪 + 自动战斗）→ RESOL
 |------|------|------|
 | 1 进入波次 | PREPARE 入口 | `wave_index` 指向即将战斗的 `WaveData` |
 | 2 准备 | PREPARE | As-Is：整库可选放置；To-Be：抽本波子集预布阵；首波前商店已在关卡加载时 roll |
-| 3 战斗 | COMBAT | 击杀掉金；自动战斗；To-Be：cycle 补人 + 人口；`CombatEventBus` 开战创建、战后销毁 |
+| 3 战斗 | COMBAT | 击杀掉金；自动战斗；线性工具环无 cycle 补人（Run 主路径见 §3.4）；`CombatEventBus` 开战创建、战后销毁 |
 | 4 结算 | RESOLVE | 发放 `WaveData.wave_gold_reward`；清敌人；清波制胜负；**不得**直接开下一场战斗 |
 | 5 商店 | PREPARE（结算后） | 购买角色卡/增益卡；RESOLVE 点「继续构筑」→ PREPARE + `roll_shop()`（线性工具环） |
 | 6 下一波 | PREPARE → COMBAT | 玩家手动点「开始第 N 波」 |
@@ -178,7 +180,21 @@ LEVEL_LOAD → PREPARE（布阵）→ COMBAT（刷怪 + 自动战斗）→ RESOL
 
 ### 3.4 Combat Sim
 
-职责拆分：
+**实时战斗（Run 主路径，`scripts/combat/realtime/`）**：
+
+| 模块 | 职责 |
+|------|------|
+| `RealtimeCombatSim` | 纯逻辑；固定步长 1/30 秒，`step(dt)` 按累计时长换算步数，结果不依赖帧率；单位按 `instance_id` 迭代 |
+| `RtUnit` / `RtProjectile` | 连续坐标（格）、状态（部署中 / 移动 / 攻击 / 阵亡）、计时器；追踪投射物 |
+| `RtUnitBrain` | 索敌范围内最近 → 否则全场最近；攻击中锁定目标；只改自身状态 |
+| `RealtimeDamagePipeline` | 唯一扣血处；经 `CombatEventBus` 发 `ON_ATTACK_HIT` / `ON_DAMAGE_TAKEN` / `ON_DEATH` 等 |
+| `RealtimeBattleController`（`scripts/ui/realtime/`） | 准备 / 战斗 / 结算；抽本场手牌、我半场投放校验、人口、敌半场刷出预览与落点；击杀金与波次金 |
+
+每步顺序：大脑决策 → 移动 → 出手 → 投射物结算 → 按质量反比推挤并钳在边界内 → 移除阵亡 → 胜负。点「开始战斗」时控制器调用 `begin_combat()`；此前在场的单位（预布阵、开战刷出）不走 `deploy_time`，此后投放的都走。属性读 `UnitStats` 的 Realtime 组。新角色无技能，本版未接 `EffectResolver`：实时路径不结算暴击（`crit_rate_percent`）和牌库条目上的附加技能。
+
+`CombatEventBus` 生命周期：进入遭遇（准备阶段）时由控制器创建，准备阶段不发战斗事件；结算后「继续」时随模拟一起释放。
+
+**旧网格回合制（`main.tscn` / 沙盒）** 职责拆分：
 
 | 模块 | 职责 |
 |------|------|
