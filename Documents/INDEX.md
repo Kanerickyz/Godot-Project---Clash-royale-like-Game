@@ -1,8 +1,8 @@
 # Project Autochess — 文档索引
 
-> 中世纪幻想 2D PvE 自走棋（构筑 + 布阵开战看联动 + 清波制）· Godot 4.6 · 最后更新：2026-10-12
+> 中世纪幻想 2D PvE 自走棋（构筑 + 预布阵 + 战斗 cycle 补人 + 清波制）· Godot 4.6 · 最后更新：2026-10-12
 >
-> 主题以 [GAME_VISION.md](./GAME_VISION.md) 定稿为准；单位美术/命名仍可能为旧动物占位（【表现待迁移】）。
+> 玩法以 [GAME_VISION.md](./GAME_VISION.md) 定稿为准（cycle/人口/单局约 1–3 分钟为 To-Be）；单位美术/命名可能仍为旧占位。
 
 ## 快速导航
 
@@ -10,11 +10,11 @@
 |------|------|
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | 当前工程状态、推荐目录树、核心系统划分 |
 | [DEVELOPMENT_WORKFLOW.md](./DEVELOPMENT_WORKFLOW.md) | Agent 职责、纵切片流程、L0–L5 阶段 |
-| [GAME_VISION.md](./GAME_VISION.md) | PvE 构筑与布阵、**清波胜负**、流派联动、关卡棋盘、刷怪/Boss 节奏、里程碑 |
+| [GAME_VISION.md](./GAME_VISION.md) | 主循环（cycle/人口）、**清波胜负**、单局时长、流派联动、棋盘与敌压 |
 | [Features/UNITS.md](./Features/UNITS.md) | **角色单位**（友方角色 / 敌方角色 / 生成的代理角色；角色等级与生命、攻击、移动；功能与数值分离） |
 | [Features/GAME_LOOP.md](./Features/GAME_LOOP.md) | **游戏基础循环**（局外 / 一整局地图 / 节点内自走棋；主模式 vs 线性工具环） |
 | [Features/MAP.md](./Features/MAP.md) | **地图与节点**（选路结构；起点/战斗/精英/Boss/商店/事件/附魔） |
-| [Features/COMBAT.md](./Features/COMBAT.md) | **战斗**（准备布阵 → 自动战斗 → 结算；一场遭遇内） |
+| [Features/COMBAT.md](./Features/COMBAT.md) | **战斗**（准备预布阵 → 自动战斗 + cycle 补人 To-Be → 结算） |
 | [SHOP_SYSTEM.md](./SHOP_SYSTEM.md) | **商店 / 牌库 / Tier**（M3b + 增益商店已实现） |
 | [BUFF_SYSTEM.md](./BUFF_SYSTEM.md) | **增益卡**规格、示例、附加流（文档目标） |
 | [ABILITIES.md](./ABILITIES.md) | **单位内建技能**目录与策划模板 |
@@ -131,9 +131,9 @@ Project Autochess/
 |------|------|------|
 | Level / Wave | 关卡配置、遭遇、`MatchStateMachine` | GAME_VISION · **M2c** |
 | Run / Map | 爬塔地图、选路、节点类型、Boss | GAME_VISION · **Run** |
-| Run / Match | 遭遇内：抽牌布阵 → 战斗 → 结算；地图商店节点 | GAME_VISION · **M2c / Run** |
+| Run / Match | 遭遇内：抽牌预布阵 → 战斗 cycle 补人 → 结算；地图商店 | GAME_VISION · **M2c / Run** |
 | Economy & Shop | 角色卡/增益卡、Tier、牌库、击杀掉金、波次结算 | **SHOP_SYSTEM** · **BUFF_SYSTEM** · **M3b** |
-| Board & Deck | 可变棋盘 + 牌库手牌放置（抽 5 To-Be） | SHOP_SYSTEM · **M3b** |
+| Board & Deck | 可变棋盘 + 本波 cycle 手牌（抽牌/战中补人 To-Be） | SHOP_SYSTEM · **M3b** |
 | Combat Sim | `CombatArena`、固定 tick、`UnitBrain` | ARCHITECTURE §3.4 · **M2b** |
 | Spawn | `SpawnSystem` 空闲格刷怪 | **M2a** · ARCHITECTURE §3.3 |
 | Effect / Synergy | `EffectResolver` + `EffectSpec` + 3 样本技能 | ARCHITECTURE §3.7 · **M3.5** |
@@ -148,5 +148,5 @@ Project Autochess/
 
 - 新增场景或 Autoload 后：更新 **仓库文件索引** 与 **推荐结构** 状态列。
 - 新增/修改 `resources/units/*.tres` 后：运行 `py tools/generate_units_roster.py` 更新 [UNITS_ROSTER.md](./UNITS_ROSTER.md)，并同步 [ABILITIES.md](./ABILITIES.md) §1.2。
-- 重大设计变更：同步修改 `ARCHITECTURE.md` / `SHOP_SYSTEM.md`，并在本页「快速导航」保持链接有效。胜负、乐趣支柱与主题（中世纪幻想）以 [GAME_VISION.md](./GAME_VISION.md) 定稿为准。
+- 重大设计变更：同步 `ARCHITECTURE.md` / `SHOP_SYSTEM.md` / `Features/` 与本页导航。当前规格以 [GAME_VISION.md](./GAME_VISION.md) 为准；**不做的内容默认不写进文档**（见 [DEVELOPMENT_WORKFLOW.md](./DEVELOPMENT_WORKFLOW.md) 养成规范）。
 - 外部游戏参考资料（如 SAP 数值对照、RoR2 道具、Master of Piece 机制）放在 `Documents/Reference/`，与架构 / 策划文档分离；**勿**与 [SHOP_SYSTEM.md](./SHOP_SYSTEM.md) / [BUFF_SYSTEM.md](./BUFF_SYSTEM.md) 等自研规格混淆。SAP **单位/食物数据**与**商店机制**分列 `SUPER_AUTO_PETS.md` 与 `SAP_SHOP_SYSTEM.md`；对冲战棋 Roguelike 参考见 `MASTER_OF_PIECE.md`。
