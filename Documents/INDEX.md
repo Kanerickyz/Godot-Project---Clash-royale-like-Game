@@ -16,8 +16,8 @@
 | [Features/UNITS.md](./Features/UNITS.md) | **角色单位**（友方角色 / 敌方角色 / 生成的代理角色；属性与行为规则；功能与数值分离） |
 | [Features/UNIT_ABILITIES.md](./Features/UNIT_ABILITIES.md) | **角色技能**（自带技能/白板、事件联动、强度评估维度；具体技能归 Content） |
 | [Content/INDEX.md](./Content/INDEX.md) | **内容库索引**（与 Features 并列） |
-| [Content/UNITS_ROSTER.md](./Content/UNITS_ROSTER.md) | **友方角色库**（十人：定位、数值草案、§6 主技能挂载；九人资源槽已绑、民兵空） |
-| [Content/UNIT_ABILITIES_ROSTER.md](./Content/UNIT_ABILITIES_ROSTER.md) | **角色技能库**（独立技能池与相对强度；挂载见角色库 §6；九人单位槽已绑） |
+| [Content/UNITS_ROSTER.md](./Content/UNITS_ROSTER.md) | **友方角色库**（二十四人 · 中世纪魔幻简名；与技能 1:1 挂载；枯骨白板；十人资源 As-Is） |
+| [Content/UNIT_ABILITIES_ROSTER.md](./Content/UNIT_ABILITIES_ROSTER.md) | **角色技能库**（二十三条；挂载见角色库 §6；存量 `.tres` As-Is、新技能 To-Be） |
 | [Features/GAME_LOOP.md](./Features/GAME_LOOP.md) | **游戏基础循环**（局外 / 一整局地图 / 节点内自走棋；主模式 vs 线性工具环） |
 | [Features/MAP.md](./Features/MAP.md) | **地图与节点**（选路结构；起点/战斗/精英/Boss/商店/事件/附魔） |
 | [Features/COMBAT.md](./Features/COMBAT.md) | **战斗**（准备站位 → 回合制依次自动战斗观战 → 结算；胜后衔接招募） |
@@ -94,7 +94,7 @@ Project Autochess/
 | `scenes/combat/realtime/realtime_battle.tscn` | Run 战斗关卡：2D 俯视实时战斗（色块/圆形占位） | **已实现** |
 | `scenes/combat/realtime/realtime_battle_demo.tscn` | 实时战斗演示（`-- --autoplay --once`） | **已实现** |
 | `scripts/combat/realtime/` | `RealtimeCombatSim` 固定时间步模拟（As-Is 实时并行弱滑动；To-Be 回合制依次 + 一动内落格顿步） | **已实现 / 待对齐** |
-| `resources/units/realtime/` | 实时十人基础兵种（显示名/数值对齐 Content；含 `rider`） | **已实现** |
+| `resources/units/realtime/` | 实时原十人（英文 id As-Is；Content 显示名已更且另有十四人 To-Be） | **已实现（十人）** |
 | `resources/deck/realtime_starter_deck.tres` | Run 起始牌库（九人，不含民兵） | **已实现** |
 | `scenes/ui/placeholder/` | 地图非战斗节点占位界面 | **已实现** |
 | `resources/runs/act1_map.tres` | Act1 地图配置 + 遭遇池 | **Run 已实现** |
