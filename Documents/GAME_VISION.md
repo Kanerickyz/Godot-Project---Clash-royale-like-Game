@@ -1,12 +1,12 @@
 # 游戏愿景 — 中世纪幻想 2D 自走棋（PvE）
 
 > 设计愿景与规则定稿入口。**胜负 / 乐趣支柱 / 主循环 / 敌情节奏 / 主题** 以本文为准。  
-> **玩家拥有物与准备布阵**（队伍 / 队伍席位上限 / 角色座位 / 全体上场）以 [Features/PLAYER.md](./Features/PLAYER.md) 为准。  
+> **玩家拥有物与准备布阵**（队伍 / 队伍席位上限 / 角色座位 / 全体上场）以 [Features/PLAYER.md](./Features/PLAYER.md) 为准；**胜后招募**以 [Features/RECRUIT.md](./Features/RECRUIT.md) 为准。  
 >
 > **【设定定稿 / 表现待迁移】** 主题为中世纪幻想；`resources/units` 与 roster 中的动物名/占位图为 As-Is，换皮另开切片。  
 >
-> **【循环 To-Be】** 有准备阶段：商店养成的**队伍**在席位上限内**全体上场**；准备阶段只把队员摆进**角色座位**（座位网格固定 2×5，最大席位 ≤ 10）；点开战后天**完全观战**，不能改阵。无号令（战令）及号令费用；无遭遇内抽牌 / 手牌 / 弃牌。队伍席位上限可在商店中提高（方式与费用见商店）。细则见 [Features/PLAYER.md](./Features/PLAYER.md)。  
-> **【循环 As-Is】** 实时主路径仍为无准备、战中抽打弃 + 号令，且仍以牌库/手牌为中介；**文档 To-Be ≠ 已实现**。  
+> **【循环 To-Be】** 有准备阶段：商店养成的**队伍**在席位上限内**全体上场**；准备阶段只把队员摆进**角色座位**（座位网格固定 2×5，最大席位 ≤ 10）；点开战后天**完全观战**，不能改阵。普通 / 精英**胜利**后进入**招募**（短名单拿人 / 换人），再回地图；**Boss 胜直接通关**（不进招募）。无号令（战令）及号令费用；无遭遇内抽牌 / 手牌 / 弃牌。队伍席位上限可在商店中提高（方式与费用见商店）。细则见 [Features/PLAYER.md](./Features/PLAYER.md)、[Features/RECRUIT.md](./Features/RECRUIT.md)。  
+> **【循环 As-Is】** 实时主路径仍为无准备、战中抽打弃 + 号令，且仍以牌库/手牌为中介；无招募阶段；**文档 To-Be ≠ 已实现**。  
 >
 > **【战场 To-Be】** 双方各有可见**角色座位**（默认 2 行 × 5 列）；友方入座人数 = 当前队伍成员数（≤ 队伍席位上限）；敌方占座与人数由关卡配置。开战后单位在 **9×16 逻辑格网**上以**八方向**寻路靠近目标（**落格顿步**：每格停稳再判攻/再迈步；**一格一体**），可越半场交战。竖屏、我下敌上见 [Features/COMBATLEVEL.md](./Features/COMBATLEVEL.md)。  
 > **【战场 As-Is】** Run 主路径已多为八向格步 + 一格一体；表现仍偏格间滑动且可并行判攻（弱棋感）。落格顿步为 To-Be。座位几何部分已落地。文档 To-Be ≠ 已实现。  
@@ -15,11 +15,11 @@
 
 ## 一句话
 
-玩家在竖屏战场上构筑中世纪阵容：商店养成**队伍**，进遭遇后在**准备阶段**把队员放入**角色座位**（全体上场），开战后天自动实时作战、玩家只观战。清光本遭遇全部敌人则胜，己方全灭则败。
+玩家在竖屏战场上构筑中世纪阵容：商店与胜后**招募**养成**队伍**，进遭遇后在**准备阶段**把队员放入**角色座位**（全体上场），开战后天自动实时作战、玩家只观战。清光本遭遇全部敌人则胜，己方全灭则败。
 
 ## 电梯稿
 
-本作是 **关卡制 / 爬塔 PvE**：地图节点上 **商店养队**，战斗节点内 **准备站位 → 开战观战**；单位靠内建技能自动联动。主流派（坚韧、冲锋）应一眼可认；跨技能涌现是加分，不作主门槛。美术与叙事为中世纪幻想（骑士、佣兵、据点与魔物），剪影可读优先。
+本作是 **关卡制 / 爬塔 PvE**：地图节点上 **商店完整养队**，战斗节点内 **准备站位 → 开战观战**，普通 / 精英胜后 **招募短名单换人** 再回地图；单位靠内建技能自动联动。主流派（坚韧、冲锋）应一眼可认；跨技能涌现是加分，不作主门槛。美术与叙事为中世纪幻想（骑士、佣兵、据点与魔物），剪影可读优先。
 
 **构筑深度** = 单位内建联动 + 槽位站位 + 增益卡。v1 **不做**种族/职业羁绊。
 
@@ -36,8 +36,8 @@
 
 ## 核心体验支柱
 
-1. **养队 → 准备站位 → 观战**【设计定稿方向 · 细则见玩家篇】  
-   商店养成队伍（换人、升级、挂增益；席位上限可在商店提高）；进遭遇后全体队员入座调站位；开战后天只观战。主乐趣是队伍取舍、养成与站位，不是抽牌或战中微操。
+1. **养队 → 准备站位 → 观战 →（胜后）招募**【设计定稿方向 · 细则见玩家篇 / 招募篇】  
+   地图商店做完整养成（升级、增益、扩席等）；普通 / 精英胜后招募做短名单拿人 / 换人；进遭遇后全体队员入座调站位；开战后天只观战。主乐趣是队伍取舍、养成与站位，不是抽牌或战中微操。
 
 2. **空间与敌压**【设计定稿】  
    战场竖屏窄深、我下敌上、中线硬半场：双方在各自半场的**角色座位**上开战落点；开战后天在逻辑格网上**八方向落格顿步**靠近目标、可越线交战（每格停稳再出手，非钉座对撞）。友方准备只入我半场空座位（席位内全体上场）；敌方按关卡占敌半场座位一次出齐。压力来自阵型对冲与越线。Boss：超高单体威胁。细则见 [Features/COMBATLEVEL.md](./Features/COMBATLEVEL.md)。
@@ -46,7 +46,7 @@
    兵种/魔物剪影可读；特效服务技能因果（观战反馈见 [Features/COMBAT_FEEDBACK.md](./Features/COMBAT_FEEDBACK.md)）。表现迁移待实现。
 
 **深度公式**：联动技能 + 槽位站位 + 增益卡。  
-队伍与准备见 [Features/PLAYER.md](./Features/PLAYER.md) 与本篇经济约定；增益见 [BUFF_SYSTEM.md](./BUFF_SYSTEM.md)；实现摘要见 [ARCHITECTURE.md](./ARCHITECTURE.md)。
+队伍与准备见 [Features/PLAYER.md](./Features/PLAYER.md)；胜后招募见 [Features/RECRUIT.md](./Features/RECRUIT.md)；增益见 [BUFF_SYSTEM.md](./BUFF_SYSTEM.md)；实现摘要见 [ARCHITECTURE.md](./ARCHITECTURE.md)。
 
 ---
 
@@ -95,16 +95,19 @@
 
 ### 爬塔 Run（主模式）
 
-主菜单 [`run_game.tscn`](../scenes/main/run_game.tscn)：Act 地图选路。第一版节点：起点 / 战斗 / 精英 / 商店 / 事件 / **附魔** / Boss。节点内 **准备站位 → 开战观战 → 结算**；胜回地图；败整局重置。商店仅在地图商店节点。生命周期见 [Features/GAME_LOOP.md](./Features/GAME_LOOP.md)；节点细则见 [Features/MAP.md](./Features/MAP.md)。队伍与准备见 [Features/PLAYER.md](./Features/PLAYER.md)。
+主菜单 [`run_game.tscn`](../scenes/main/run_game.tscn)：Act 地图选路。第一版节点：起点 / 战斗 / 精英 / 商店 / 事件 / **附魔** / Boss。节点内 **准备站位 → 开战观战 → 结算**；普通 / 精英胜 → **招募** → 回地图；**Boss 胜 → 通关**；败整局重置。地图商店做完整养成；招募做胜后短名单。生命周期见 [Features/GAME_LOOP.md](./Features/GAME_LOOP.md)；节点细则见 [Features/MAP.md](./Features/MAP.md)；招募见 [Features/RECRUIT.md](./Features/RECRUIT.md)；队伍与准备见 [Features/PLAYER.md](./Features/PLAYER.md)。
 
 ```mermaid
 flowchart TD
-    Map[MAP_选路] -->|战斗类| Prep[PREPARE_站位入座] --> Combat[COMBAT_观战] --> Resolve[RESOLVE] --> Map
+    Map[MAP_选路] -->|战斗或精英| Prep[PREPARE_站位入座] --> Combat[COMBAT_观战] --> Resolve[RESOLVE]
+    Resolve -->|胜利| Recruit[RECRUIT_招募] --> Map
+    Resolve -->|失败| RunDefeat[RUN_DEFEAT]
+    Map -->|Boss| BossPrep[PREPARE] --> BossCombat[COMBAT] --> BossResolve[RESOLVE]
+    BossResolve -->|胜利| RunComplete[RUN_COMPLETE]
+    BossResolve -->|失败| RunDefeat
     Map --> ShopNode[SHOP] --> Map
     Map --> Event[EVENT] --> Map
     Map --> Enchant[ENCHANT_附魔] --> Map
-    Resolve -->|失败| RunDefeat[RUN_DEFEAT]
-    Map -->|Boss胜利| RunComplete[RUN_COMPLETE]
 ```
 
 数据：`RunMapConfig` + `MapGenerator` → `MapState`；单次战斗 `EncounterData.wave`。见 [ARCHITECTURE.md](./ARCHITECTURE.md) §3.1。
@@ -133,10 +136,11 @@ flowchart TD
 | 2 | 准备 | 全体队员入座 / 换座；点开战 | 校验座位；不推进战斗 |
 | 3 | 战斗 | 观战（可加速）；不能改阵 | 敌方按已配置座位出齐；自动战斗；击杀掉金 |
 | 4 | 结算 | 查看结果 | 波次金；敌全灭胜 / 己全灭败。线性关可重开；Run 失败整局重置 |
-| 5 | 商店（线性关波间 / Run 地图节点） | 买角色/增益；换人；提高席位上限等 | 扣费、改队伍；细则见商店 |
-| 6 | 下一波 / 回地图 | — | `wave_index++`、回地图或关卡完成 |
+| 5 | 招募（仅普通 / 精英胜） | 花金招人/替换；刷新；重置；跳过或完成 | 改队伍；见招募篇。Boss 胜跳过本步直接通关 |
+| 6 | 商店（线性关波间 / Run 地图节点） | 买角色/增益；换人；提高席位上限等 | 扣费、改队伍；细则见商店 |
+| 7 | 下一波 / 回地图 | — | `wave_index++`、回地图或关卡完成 |
 
-**【As-Is】** 实时主路径仍可能跳过准备、战中出牌。
+**【As-Is】** 实时主路径仍可能跳过准备、战中出牌；无招募阶段。
 
 ### 经济（v1）
 
@@ -212,6 +216,7 @@ LEVEL_LOAD → PREPARE → COMBAT → RESOLVE → … → LEVEL_COMPLETE
 | M4 | 增益商店完善、更多技能、关卡 UI；半场 | 部分先行 |
 | M5 | 多遭遇节奏、tooltip、平衡、美术音效 | — |
 | — | 玩家篇：队伍全体上场 / 准备站位 / 开战观战 / 无号令 | 文档 To-Be（实现未对齐） |
+| — | 招募：普通/精英胜后短名单拿人 | 文档 To-Be（未实现） |
 
 技术拆解见 [ARCHITECTURE.md](./ARCHITECTURE.md)。
 
@@ -223,7 +228,8 @@ LEVEL_LOAD → PREPARE → COMBAT → RESOLVE → … → LEVEL_COMPLETE
 
 - 商店：扩席如何购买与费用、满员换人交互、出售与增益挂载细则（见商店文档；玩家篇不写）
 - 开局队伍人数与起始席位上限（数值填空）
+- 招募：单价、刷新费、品阶×进度权重表（数值填空；见招募篇）
 
 ---
 
-相关文档：[ARCHITECTURE.md](./ARCHITECTURE.md) · [BUFF_SYSTEM.md](./BUFF_SYSTEM.md) · [Features/PLAYER.md](./Features/PLAYER.md) · [Features/COMBATLEVEL.md](./Features/COMBATLEVEL.md) · [Features/GAME_LOOP.md](./Features/GAME_LOOP.md) · [Features/COMBAT.md](./Features/COMBAT.md) · [INDEX.md](./INDEX.md)
+相关文档：[ARCHITECTURE.md](./ARCHITECTURE.md) · [BUFF_SYSTEM.md](./BUFF_SYSTEM.md) · [Features/PLAYER.md](./Features/PLAYER.md) · [Features/RECRUIT.md](./Features/RECRUIT.md) · [Features/COMBATLEVEL.md](./Features/COMBATLEVEL.md) · [Features/GAME_LOOP.md](./Features/GAME_LOOP.md) · [Features/COMBAT.md](./Features/COMBAT.md) · [INDEX.md](./INDEX.md)
