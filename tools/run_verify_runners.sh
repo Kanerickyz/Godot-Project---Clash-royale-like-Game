@@ -5,6 +5,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 GODOT_BIN="${GODOT_BIN:-godot}"
 cd "$ROOT"
 
+# 新 clone 尚无导入缓存时，preload 的贴图会解析失败。
+"$GODOT_BIN" --headless --path . --import >/dev/null 2>&1 || true
+
 runners=(
   "res://scripts/combat/effect_resolver_faint_test_runner.gd"
   "res://scripts/combat/effect_resolver_bomber_test_runner.gd"
@@ -18,6 +21,7 @@ runners=(
   "res://scripts/ui/realtime/recruit_arena_transition_test_runner.gd"
   "res://scripts/ui/realtime/opening_recruit_flow_test_runner.gd"
   "res://scripts/ui/realtime/realtime_combat_feedback_test_runner.gd"
+  "res://scripts/ui/realtime/unit_art_catalog_test_runner.gd"
   "res://scripts/core/board_grid_distance_test_runner.gd"
   "res://scripts/core/draw_service_test_runner.gd"
   "res://scripts/core/run/map_generator_test_runner.gd"
