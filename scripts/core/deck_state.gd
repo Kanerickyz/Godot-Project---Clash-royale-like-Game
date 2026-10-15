@@ -106,6 +106,12 @@ func get_seat_cols() -> int:
 	return _config.get_seat_cols()
 
 
+func get_slot_count() -> int:
+	if _config == null:
+		return DeckConfig.DEFAULT_SEAT_ROWS * DeckConfig.DEFAULT_SEAT_COLS
+	return _config.get_slot_count()
+
+
 func get_enter_hand_cooldown() -> float:
 	if _config == null:
 		return EncounterCardFlow.DEFAULT_ENTER_HAND_COOLDOWN

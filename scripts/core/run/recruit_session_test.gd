@@ -12,6 +12,7 @@ const MINI_PEKKA := preload("res://resources/units/realtime/mini_pekka.tres")
 static func run_all() -> bool:
 	var passed := true
 	passed = _test_should_offer_recruit() and passed
+	passed = _test_seat_cap_uses_min_of_max_size_and_seat_grid() and passed
 	passed = _test_snapshot_reset_restores_gold_team_candidates() and passed
 	passed = _test_refresh_keeps_recruited() and passed
 	passed = _test_replace_no_refund() and passed
@@ -70,6 +71,24 @@ static func _make_session(
 	session.configure(_make_config(), deck, economy, rng)
 	session.begin(progress)
 	return session
+
+
+static func _test_seat_cap_uses_min_of_max_size_and_seat_grid() -> bool:
+	var deck := _make_deck([ARCHER], 20)
+	var economy := _make_economy(5)
+	var session := _make_session(deck, economy, 3, 0.0)
+	if session.get_seat_cap() != 10:
+		push_error("RecruitSessionTest: seat cap should be min(20, 2x5)=10, got %d" % session.get_seat_cap())
+		return false
+	var small := _make_deck([ARCHER, KNIGHT], 2)
+	var session_small := _make_session(small, _make_economy(5), 4, 0.0)
+	if session_small.get_seat_cap() != 2:
+		push_error("RecruitSessionTest: seat cap should respect smaller max_size=2")
+		return false
+	if not session_small.needs_replace():
+		push_error("RecruitSessionTest: full at max_size=2 should need replace")
+		return false
+	return true
 
 
 static func _test_should_offer_recruit() -> bool:

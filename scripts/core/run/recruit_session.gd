@@ -76,9 +76,25 @@ func get_recruit_cost(unit: UnitData) -> int:
 
 
 func get_seat_cap() -> int:
+	## 队伍席位上限：取牌库 max_size 与座位网格总数的较小值（默认 ≤10），
+	## 不用 deploy_cap（As-Is 上场上限可小于队伍人数）。
 	if deck == null:
 		return 0
-	return deck.get_max_size()
+	var deck_cap := deck.get_max_size()
+	var seat_grid := deck.get_slot_count()
+	if deck_cap <= 0 and seat_grid <= 0:
+		return 0
+	if deck_cap <= 0:
+		return seat_grid
+	if seat_grid <= 0:
+		return deck_cap
+	return mini(deck_cap, seat_grid)
+
+
+func is_roster_full() -> bool:
+	if deck == null:
+		return true
+	return deck.size() >= get_seat_cap()
 
 
 func get_preferred_tier() -> int:
@@ -103,7 +119,7 @@ func can_refresh() -> bool:
 
 
 func needs_replace() -> bool:
-	return deck != null and deck.is_full()
+	return is_roster_full()
 
 
 ## 空席：replace_entry_id 忽略；满员：必须指定被替换成员。
@@ -120,7 +136,8 @@ func try_recruit(candidate_index: int, replace_entry_id: int = -1) -> Dictionary
 		result["reason"] = "no_gold"
 		return result
 
-	if deck.can_add():
+	if not is_roster_full():
+		## 空席加入：仍受牌库 max_size 硬顶（DeckState.add_entry），但席位以 deploy_cap 为准。
 		if not economy.spend(cost):
 			result["reason"] = "no_gold"
 			return result
