@@ -226,3 +226,40 @@ func _find_index(entry_id: int) -> int:
 		if _entries[i].entry_id == entry_id:
 			return i
 	return -1
+
+
+## 招募进门快照：深拷贝条目（含 entry_id / 等级 / 增益）。
+func capture_roster() -> Dictionary:
+	var copies: Array[DeckEntry] = []
+	for entry in _entries:
+		if entry != null:
+			copies.append(_clone_entry(entry))
+	return {
+		"entries": copies,
+		"next_entry_id": _next_entry_id,
+	}
+
+
+func restore_roster(snapshot: Dictionary) -> void:
+	_entries.clear()
+	var source: Array = snapshot.get("entries", [])
+	for item in source:
+		if item is DeckEntry:
+			_entries.append(_clone_entry(item as DeckEntry))
+	_next_entry_id = int(snapshot.get("next_entry_id", _next_entry_id))
+	deck_changed.emit()
+
+
+func _clone_entry(source: DeckEntry) -> DeckEntry:
+	var entry := DeckEntry.new()
+	entry.entry_id = source.entry_id
+	entry.unit = source.unit
+	entry.attached_buffs = source.attached_buffs.duplicate()
+	entry.attached_abilities = source.attached_abilities.duplicate()
+	entry.rule_flags = source.rule_flags.duplicate(true)
+	entry.level = source.level
+	entry.experience = source.experience
+	entry.bonus_attack = source.bonus_attack
+	entry.bonus_max_hp = source.bonus_max_hp
+	entry.bonus_crit_rate_percent = source.bonus_crit_rate_percent
+	return entry

@@ -19,6 +19,7 @@ runners=(
   "res://scripts/core/board_grid_distance_test_runner.gd"
   "res://scripts/core/draw_service_test_runner.gd"
   "res://scripts/core/run/map_generator_test_runner.gd"
+  "res://scripts/core/run/recruit_session_test_runner.gd"
   "res://scripts/core/run/sacrifice_service_test_runner.gd"
   "res://scripts/core/wfc/wfc_generator_test_runner.gd"
 )
