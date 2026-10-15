@@ -2,7 +2,7 @@
 
 ## 开始工作
 - 用中文沟通；先读 [Documents/INDEX.md](Documents/INDEX.md)、相关设计文档和目标模块；检查 `git status`，保留用户修改。
-- 设计意图来自 [Documents/GAME_VISION.md](Documents/GAME_VISION.md)、[Documents/BUFF_SYSTEM.md](Documents/BUFF_SYSTEM.md) 与 `Documents/Features/`（角色技能见 [Features/UNIT_ABILITIES.md](Documents/Features/UNIT_ABILITIES.md)）；现有行为来自代码、场景与资源。发现冲突要说明，不把建议写成已完成。商店/牌库细则以愿景、架构摘要与实现为准（已删除旧 `SHOP_SYSTEM.md`）。
+- 设计意图来自 [Documents/GAME_VISION.md](Documents/GAME_VISION.md)、[Documents/BUFF_SYSTEM.md](Documents/BUFF_SYSTEM.md) 与 `Documents/Features/`（角色技能见 [Features/UNIT_ABILITIES.md](Documents/Features/UNIT_ABILITIES.md)；玩家拥有物见 [Features/PLAYER.md](Documents/Features/PLAYER.md)）；现有行为来自代码、场景与资源。发现冲突要说明，不把建议写成已完成。商店细则以愿景、架构摘要与实现为准（已删除旧 `SHOP_SYSTEM.md`）；文档 To-Be 为**队伍**养成，As-Is 仍可能是牌库/手牌。
 - 胜负与主循环以 [Documents/GAME_VISION.md](Documents/GAME_VISION.md) 定稿为准（文档定稿 ≠ 代码已对齐时须对照实现）。写文档时遵守 [Documents/DEVELOPMENT_WORKFLOW.md](Documents/DEVELOPMENT_WORKFLOW.md)「养成规范」：**当前不做的默认不写进规格**。技能规则见 [Documents/Features/UNIT_ABILITIES.md](Documents/Features/UNIT_ABILITIES.md)，技能内容池见 [Documents/Content/UNIT_ABILITIES_ROSTER.md](Documents/Content/UNIT_ABILITIES_ROSTER.md)。
 - Godot 4.6、GDScript，默认入口 `scenes/main/main_menu.tscn`。
 - Cloud Agent 环境应提供 PATH 上的 `godot`（4.6）；可用 `GODOT_BIN` 覆盖。Headless 验证：`godot --headless --path . --script res://scripts/**/*_test_runner.gd`。GUI 验收用桌面 DISPLAY（常见为 `:1`）；无声卡时引擎会回退 dummy 音频驱动，属预期。
@@ -10,7 +10,7 @@
 - **提出需求时先问验收方式**（见 [Documents/DEVELOPMENT_WORKFLOW.md](Documents/DEVELOPMENT_WORKFLOW.md)「验收方式」）：**轻量** = `bash tools/run_light_verify.sh` 加载通过即可，效果由用户验；**完全** = 现行 runner + 按 L 级 QA/GUI。未指定先问再做。
 
 ## 游戏约束
-- 关卡制 / 爬塔 PvE 自走棋：商店构筑牌库、**准备抽选入角色座位**（可刷新；受上场人数上限约束）、开战后天**纯观战**（不能出牌）；上场单位自动实时战斗、玩家不可拖动。无人口、无号令。新增 PVP、羁绊或单位微操走位需明确设计需求。
+- 关卡制 / 爬塔 PvE 自走棋：商店养成**队伍**、**准备站位入角色座位**（席位内全体上场；座位固定 2×5，最大席位 ≤ 10）、开战后天**纯观战**（不能改阵）；上场单位自动实时战斗、玩家不可拖动。无号令；无遭遇内抽牌/手牌；队伍席位上限可在商店提高（细则见商店）。新增 PVP、羁绊或单位微操走位需明确设计需求。
 - v1 不含种族/职业羁绊。流派来自单位内建技能、增益卡与槽位站位。若将来加羁绊必须复用 `EffectSpec` / `EffectResolver`，禁止另写一套 Buff。
 - 所有战斗增益经 `EffectSpec` + `EffectResolver`；`AbilityData` 引用 `Array[EffectSpec]`。
 - 战斗触发只经 `CombatEventBus`；`DamagePipeline` / `UnitBrain` 只 emit，不直接改其他单位属性。流程与 UI 可用 Autoload；战斗内触发不走全局 Bus。
