@@ -11,7 +11,7 @@ const MOUNT_TABLE := {
 	"musketeer": "crit_extra_damage_mid",
 	"valkyrie": "deal_damage_gain_atk_small",
 	"barbarian": "ally_death_self_atk_mid",
-	"archer": "ally_deploy_self_atk_small",
+	"archer": "deploy_self_atk_small",
 	"goblin": "death_spawn_pack",
 	"spear_goblin": "death_aoe_mid",
 }
@@ -31,7 +31,10 @@ static func run_all() -> bool:
 	_check("crit_extra_damage_mid", _test_crit_extra_damage_mid())
 	_check("kill_gain_atk_mid", _test_kill_gain_atk_mid())
 	_check("ally_death_self_atk_mid", _test_ally_death_self_atk_mid())
-	_check("ally_deploy_self_atk_small", _test_ally_deploy_self_atk_small())
+	_check("deploy_self_atk_small", _test_deploy_self_atk_small())
+	_check("first_hurt_harden_once", _test_first_hurt_harden_once())
+	_check("deal_vs_higher_hp_extra", _test_deal_vs_higher_hp_extra())
+	_check("deal_damage_adj_splash_small", _test_deal_damage_adj_splash_small())
 	_check("death_spawn_pack", _test_death_spawn_pack())
 	_check("death_aoe_deal_damage", _test_death_aoe_deal_damage())
 	_check("musketeer_has_nonzero_crit", _test_musketeer_has_nonzero_crit())
@@ -310,30 +313,154 @@ static func _test_ally_death_self_atk_mid() -> bool:
 	return true
 
 
-static func _test_ally_deploy_self_atk_small() -> bool:
+static func _test_deploy_self_atk_small() -> bool:
 	var data := _load_unit("res://resources/units/realtime/archer.tres")
-	if data == null or data.ability == null or data.ability.id != "ally_deploy_self_atk_small":
-		push_error("ally_deploy: archer ability not mounted")
+	if data == null or data.ability == null or data.ability.id != "deploy_self_atk_small":
+		push_error("deploy_self: archer ability not mounted")
 		return false
+	var expected_base := data.stats.attack if data.stats != null else 0
 	var sim := _new_sim()
 	sim.configure(ARENA, 19)
+	## add_unit 生成当下发 ON_SUMMONED，应立刻自加攻。
 	var archer := sim.add_unit(_make_from_data(data, UnitInstance.Team.PLAYER), Vector2(9.5, 24.5))
-	sim.add_unit(_dummy(UnitInstance.Team.ENEMY, 100000, {"steps_per_turn": 0, "sight_range": 0.0}), Vector2(9.5, 4.5))
-	sim.begin_combat()
-	var base_atk := archer.unit.get_effective_attack()
-	# 战中补人：走 deploy，结束时发 ON_FRIEND_SUMMONED
-	var reinforce := RealtimeCombatSimTest.make_unit(
-		UnitInstance.Team.PLAYER,
-		{"max_hp": 100, "attack": 1, "deploy_time": 0.1, "steps_per_turn": 0, "sight_range": 0.0},
+	var after := archer.unit.get_effective_attack()
+	if after != expected_base + 1:
+		push_error(
+			"deploy_self: archer atk %d, expected base %d +1 on OnSummoned"
+			% [after, expected_base]
+		)
+		return false
+	return true
+
+
+static func _test_first_hurt_harden_once() -> bool:
+	var data := _load_unit("res://resources/units/realtime/rune_plate.tres")
+	if data == null or data.ability == null or data.ability.id != "first_hurt_harden":
+		push_error("first_hurt: rune_plate ability not mounted")
+		return false
+	var bus := CombatEventBus.new()
+	var sim := _new_sim(bus)
+	sim.configure(ARENA, 23)
+	var rt := sim.add_unit(_make_from_data(data, UnitInstance.Team.PLAYER), Vector2(9.5, 20.5))
+	rt.unit.stats.max_hp = 20
+	rt.unit.current_hp = 20
+	sim.add_unit(
+		RealtimeCombatSimTest.make_unit(
+			UnitInstance.Team.ENEMY,
+			{
+				"attack": 1,
+				"max_hp": 100000,
+				"steps_per_turn": 0,
+				"attack_windup": 0.0,
+				"attack_interval": 0.2,
+				"attack_reach": 2.0,
+				"sight_range": 10.0,
+			},
+		),
+		Vector2(9.5, 21.5),
 	)
-	sim.add_unit(reinforce, Vector2(8.5, 24.5))
+	var base_max := rt.unit.get_effective_max_hp()
+	var plate_hits: Array[int] = [0]
+	var plate_id := rt.unit.instance_id
+	bus.combat_event.connect(
+		func(event_type: StringName, payload: CombatEventPayload) -> void:
+			if (
+				event_type == CombatEvents.ON_DAMAGE_TAKEN
+				and payload.target != null
+				and payload.target.instance_id == plate_id
+			):
+				plate_hits[0] += 1
+	)
 	var guard := 0
-	while archer.unit.get_effective_attack() <= base_atk and guard < 100:
+	while plate_hits[0] < 2 and guard < 400:
 		sim.advance_fixed_step()
 		guard += 1
-	var after := archer.unit.get_effective_attack()
-	if after <= base_atk:
-		push_error("ally_deploy: archer atk %d -> %d, expected buff on friend summon" % [base_atk, after])
+	if plate_hits[0] < 2:
+		push_error("first_hurt: expected >=2 plate hits, got %d" % plate_hits[0])
+		return false
+	var after_max := rt.unit.get_effective_max_hp()
+	if after_max != base_max + 2:
+		push_error(
+			"first_hurt: max_hp %d -> %d, expected +2 once (max_triggers=1)"
+			% [base_max, after_max]
+		)
+		return false
+	return true
+
+
+static func _test_deal_vs_higher_hp_extra() -> bool:
+	var data := _load_unit("res://resources/units/realtime/hunter.tres")
+	if data == null or data.ability == null or data.ability.id != "deal_vs_higher_hp_extra":
+		push_error("vs_higher: hunter ability not mounted")
+		return false
+	var sim := _new_sim()
+	sim.configure(ARENA, 29)
+	var hunter := sim.add_unit(_make_from_data(data, UnitInstance.Team.PLAYER), Vector2(9.5, 20.5))
+	hunter.unit.stats.attack_windup = 0.0
+	hunter.unit.stats.attack_interval = 0.3
+	hunter.unit.stats.steps_per_turn = 0
+	hunter.unit.stats.attack_reach = 2.0
+	## 目标当前生命高于猎人 → 条件成立；远处木桩避免清场。
+	var fat := sim.add_unit(
+		_dummy(UnitInstance.Team.ENEMY, 50, {"steps_per_turn": 0, "sight_range": 0.0, "body_radius": 0.3}),
+		Vector2(9.5, 20.0),
+	)
+	sim.add_unit(
+		_dummy(UnitInstance.Team.ENEMY, 100000, {"steps_per_turn": 0, "sight_range": 0.0}),
+		Vector2(2.5, 4.5),
+	)
+	var hp_before := fat.unit.current_hp
+	var base_atk := hunter.unit.get_effective_attack()
+	var guard := 0
+	while fat.unit.current_hp > hp_before - (base_atk + 2) and guard < 300:
+		sim.advance_fixed_step()
+		guard += 1
+	var dealt := hp_before - fat.unit.current_hp
+	## 普攻 + 削峰额外（资源 value=2）；至少应超过裸攻。
+	if dealt < base_atk + 2:
+		push_error(
+			"vs_higher: dealt %d, expected >= atk(%d)+extra(2)" % [dealt, base_atk]
+		)
+		return false
+	return true
+
+
+static func _test_deal_damage_adj_splash_small() -> bool:
+	var data := _load_unit("res://resources/units/realtime/maul.tres")
+	if data == null or data.ability == null or data.ability.id != "deal_damage_adj_splash_small":
+		push_error("adj_splash: maul ability not mounted")
+		return false
+	var sim := _new_sim()
+	sim.configure(ARENA, 31)
+	var maul := sim.add_unit(_make_from_data(data, UnitInstance.Team.PLAYER), Vector2(9.5, 20.5))
+	maul.unit.stats.attack_windup = 0.0
+	maul.unit.stats.attack_interval = 0.3
+	maul.unit.stats.steps_per_turn = 0
+	maul.unit.stats.attack_reach = 2.0
+	maul.unit.stats.splash_radius = 0.0
+	var primary := sim.add_unit(
+		_dummy(UnitInstance.Team.ENEMY, 100, {"steps_per_turn": 0, "sight_range": 0.0, "body_radius": 0.3}),
+		Vector2(9.5, 20.0),
+	)
+	## 邻格敌人（不含主目标）；应吃到 ENEMIES_ADJACENT_TO_EVENT_TARGET 溅射。
+	var neighbor := sim.add_unit(
+		_dummy(UnitInstance.Team.ENEMY, 100, {"steps_per_turn": 0, "sight_range": 0.0, "body_radius": 0.3}),
+		Vector2(10.5, 20.0),
+	)
+	sim.add_unit(
+		_dummy(UnitInstance.Team.ENEMY, 100000, {"steps_per_turn": 0, "sight_range": 0.0}),
+		Vector2(2.5, 4.5),
+	)
+	var neigh_before := neighbor.unit.current_hp
+	var guard := 0
+	while neighbor.unit.current_hp >= neigh_before and guard < 300:
+		sim.advance_fixed_step()
+		guard += 1
+	if neighbor.unit.current_hp >= neigh_before:
+		push_error(
+			"adj_splash: neighbor hp unchanged (%d); primary hp=%d"
+			% [neighbor.unit.current_hp, primary.unit.current_hp]
+		)
 		return false
 	return true
 

@@ -18,7 +18,7 @@
 
 | 文档 | 说明 |
 |------|------|
-| [UNITS_ROSTER.md](./UNITS_ROSTER.md) | **友方角色库**（二十四人 · 中世纪魔幻简名；§6 与技能 1:1 挂载；枯骨白板；十人资源 As-Is、十四人 To-Be） |
-| [UNIT_ABILITIES_ROSTER.md](./UNIT_ABILITIES_ROSTER.md) | **角色技能库**（二十三条；含新六条与援军呼应改写；挂载见角色库 §6；存量 `.tres` As-Is） |
+| [UNITS_ROSTER.md](./UNITS_ROSTER.md) | **友方角色库**（二十四人 · 中世纪魔幻简名；§6 与技能 1:1；枯骨白板；realtime 资源已写） |
+| [UNIT_ABILITIES_ROSTER.md](./UNIT_ABILITIES_ROSTER.md) | **角色技能库**（二十三条；挂载见角色库 §6；掩护射击待管线） |
 
 敌方 Boss / 高威胁位另册，不进本版友方总表。

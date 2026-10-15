@@ -25,7 +25,7 @@ deploy_time = 1.0
 [resource]
 script = ExtResource("1_unit")
 id = "barbarian"
-display_name = "斧兵"
+display_name = "蛮斧"
 cost = 2
 tier = 1
 command_cost = 3

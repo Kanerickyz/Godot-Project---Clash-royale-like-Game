@@ -24,7 +24,7 @@ deploy_time = 0.7
 [resource]
 script = ExtResource("1_unit")
 id = "skeleton"
-display_name = "民兵"
+display_name = "枯骨"
 cost = 1
 tier = 1
 command_cost = 1

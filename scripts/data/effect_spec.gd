@@ -18,6 +18,15 @@ enum TargetSelector {
 	RANDOM_CELLS,
 	UNIT_AHEAD_OF_MOVE,
 	HIGHEST_CURRENT_HP_ALLY,
+	## 事件目标邻格上的敌人（Chebyshev=1；不含事件目标自身）。
+	ENEMIES_ADJACENT_TO_EVENT_TARGET,
+}
+
+## Optional gate evaluated when the trigger fires (before targets/actions).
+enum Condition {
+	NONE,
+	## 事件目标当前生命 > 技能持有者当前生命。
+	EVENT_TARGET_HP_GT_OWNER,
 }
 
 ## Combat + shop trigger names (CombatEvents / ShopEvents).
@@ -48,6 +57,9 @@ const TRIGGER_NAMES: PackedStringArray = [
 @export var exclude_owner: bool = false
 @export_range(1, 5, 1) var target_count: int = 1
 @export var actions: Array[EffectAction] = []
+## 0 = unlimited. Counts successful enqueues per owner+spec this combat.
+@export_range(0, 99, 1) var max_triggers_per_combat: int = 0
+@export var condition: Condition = Condition.NONE
 
 
 func is_trigger_registered() -> bool:

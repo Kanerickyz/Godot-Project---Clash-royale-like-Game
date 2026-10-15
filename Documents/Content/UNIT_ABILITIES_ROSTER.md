@@ -4,8 +4,7 @@
 > 功能规则见 [Features/UNIT_ABILITIES.md](../Features/UNIT_ABILITIES.md)；友方角色见 [UNITS_ROSTER.md](./UNITS_ROSTER.md)。  
 > **本篇写**：技能内容池——名称、触发、效果草案、相对强度。  
 > **本篇不写**：定点数 / 百分比；玩家可见流派标签。挂载（**1 技能 ↔ 1 角色**）见 [UNITS_ROSTER.md](./UNITS_ROSTER.md) §6。  
-> **【As-Is】** 存量技能 `.tres` 约 16 条已建（`掩护射击` 待管线）；原九人已绑 realtime `ability`。  
-> **【To-Be】** 本篇新增 6 条、援军呼应改写、与二十四人 1:1 挂载；新 `.tres` / 新单位绑槽另开切片。
+> **【资源】** 本篇 23 条中除 `掩护射击`（待管线、未建 `.tres`）外均有 ability 资源；二十四人 1:1 挂载已绑（弩手空槽）。援军呼应改写为 `deploy_self_atk_small`（OnSummoned）。
 
 ## 1. 范围与共识
 
@@ -94,11 +93,11 @@
 
 | 项 | 状态 |
 |----|------|
-| 技能内容池（文档） | 本篇 §3：**23** 条（含新 6 条 + 援军呼应改写） |
-| 技能 `.tres` | 存量约 16 条已建；新 6 条与 `deploy_self_atk_small`、掩护射击管线为 **To-Be** |
+| 技能内容池（文档） | 本篇 §3：**23** 条 |
+| 技能 `.tres` | 除 `掩护射击` 外已建（含新 6 条 + `deploy_self_atk_small`） |
 | 生成用 token | `resources/units/tokens/token_{weak,weak_copy,thick_copy,ember}.tres`（无主技能） |
-| 角色 1:1 挂载表 | [UNITS_ROSTER.md](./UNITS_ROSTER.md) §6（二十四人；枯骨空） |
-| realtime 单位 `ability` | **As-Is** 仅原九人旧挂载；新十四人与改写/新技能 **未绑** |
+| 角色 1:1 挂载表 | [UNITS_ROSTER.md](./UNITS_ROSTER.md) §6（二十四人；枯骨空；弩手空槽） |
+| realtime 单位 `ability` | 已绑（弩手除外） |
 
 ## 7. 维护
 
