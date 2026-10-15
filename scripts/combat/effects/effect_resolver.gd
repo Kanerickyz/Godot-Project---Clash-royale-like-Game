@@ -10,6 +10,10 @@ var _rng: RandomNumberGenerator
 var _pending_batches: Array[QueuedEffectBatch] = []
 var _friend_hurt_this_round: int = 0
 var _deck_state: DeckState
+## owner.instance_id -> { EffectSpec.get_instance_id(): count }
+var _spec_trigger_counts: Dictionary = {}
+## 技能 DEAL_DAMAGE 执行期间抑制 OnDealDamage 再入队，避免捎带伤连环刷触发。
+var _suppress_deal_damage_triggers: int = 0
 
 
 func _init(
@@ -35,6 +39,13 @@ func on_event(event_type: StringName, payload: CombatEventPayload) -> void:
 		return
 	if event_type == CombatEvents.ON_ATTACK_HIT:
 		return
+	if (
+		event_type == CombatEvents.ON_DEAL_DAMAGE
+		and _suppress_deal_damage_triggers > 0
+	):
+		return
+	if event_type == CombatEvents.ON_COMBAT_START:
+		_spec_trigger_counts.clear()
 	if event_type == CombatEvents.ON_ROUND_START:
 		_friend_hurt_this_round = 0
 	if event_type == CombatEvents.ON_DAMAGE_TAKEN:
@@ -113,10 +124,18 @@ func _enqueue_for_event(
 		for spec in _get_effect_specs(unit):
 			if not _spec_trigger_matches(spec, event_type):
 				continue
+			if not _spec_condition_met(spec, unit, payload):
+				continue
+			if not _spec_under_trigger_cap(unit, spec):
+				continue
 			if _spec_uses_cell_targets(spec):
+				var applied_cell := false
 				for action in spec.actions:
 					if action.action_type == EffectAction.Type.APPLY_CELL_EFFECT:
 						_apply_cell_effect(action, spec, unit, payload)
+						applied_cell = true
+				if applied_cell:
+					_record_spec_trigger(unit, spec)
 				continue
 			var targets := _resolve_targets(spec, unit, payload)
 			var batch := QueuedEffectBatch.new()
@@ -140,6 +159,7 @@ func _enqueue_for_event(
 					batch.entries.append(step)
 			if not batch.entries.is_empty():
 				_pending_batches.append(batch)
+				_record_spec_trigger(unit, spec)
 
 
 ## 仅当技能拥有者是事件的「主体」时才处理（SELF 类效果对应该单位自身经历的事件）。
@@ -267,6 +287,8 @@ func _resolve_targets(
 			var ally := _pick_highest_current_hp_ally(owner, spec.exclude_owner)
 			if ally != null:
 				result.append(ally)
+		EffectSpec.TargetSelector.ENEMIES_ADJACENT_TO_EVENT_TARGET:
+			result.append_array(_pick_enemies_adjacent_to_event_target(owner, payload))
 	return result
 
 
@@ -404,6 +426,71 @@ static func _spec_trigger_matches(spec: EffectSpec, event_type: StringName) -> b
 	return StringName(spec.trigger) == event_type
 
 
+func _spec_condition_met(
+	spec: EffectSpec,
+	owner: UnitInstance,
+	payload: CombatEventPayload,
+) -> bool:
+	if spec == null:
+		return false
+	match spec.condition:
+		EffectSpec.Condition.NONE:
+			return true
+		EffectSpec.Condition.EVENT_TARGET_HP_GT_OWNER:
+			if owner == null or payload == null or payload.target == null:
+				return false
+			return payload.target.current_hp > owner.current_hp
+		_:
+			return true
+
+
+func _spec_under_trigger_cap(owner: UnitInstance, spec: EffectSpec) -> bool:
+	if spec == null or spec.max_triggers_per_combat <= 0:
+		return true
+	if owner == null:
+		return false
+	var by_spec: Dictionary = _spec_trigger_counts.get(owner.instance_id, {})
+	var used: int = int(by_spec.get(spec.get_instance_id(), 0))
+	return used < spec.max_triggers_per_combat
+
+
+func _record_spec_trigger(owner: UnitInstance, spec: EffectSpec) -> void:
+	if owner == null or spec == null or spec.max_triggers_per_combat <= 0:
+		return
+	var by_spec: Dictionary = _spec_trigger_counts.get(owner.instance_id, {})
+	var key := spec.get_instance_id()
+	by_spec[key] = int(by_spec.get(key, 0)) + 1
+	_spec_trigger_counts[owner.instance_id] = by_spec
+
+
+func _pick_enemies_adjacent_to_event_target(
+	owner: UnitInstance,
+	payload: CombatEventPayload,
+) -> Array[UnitInstance]:
+	var result: Array[UnitInstance] = []
+	if owner == null or payload == null or payload.target == null or _grid == null:
+		return result
+	var center := payload.target.grid_pos
+	var found := _grid.find_cell_of(payload.target)
+	if found != Vector2i(-1, -1):
+		center = found
+	for unit in _grid.get_alive_units():
+		if unit == null or not unit.is_alive():
+			continue
+		if unit.instance_id == payload.target.instance_id:
+			continue
+		if unit.team == owner.team:
+			continue
+		var cell := unit.grid_pos
+		var unit_cell := _grid.find_cell_of(unit)
+		if unit_cell != Vector2i(-1, -1):
+			cell = unit_cell
+		if _grid.combat_distance(center, cell) == 1:
+			result.append(unit)
+	result.sort_custom(_sort_listeners)
+	return result
+
+
 func process_attack_hit_immediate(payload: CombatEventPayload) -> Dictionary:
 	var result := {
 		"swapped": false,
@@ -494,6 +581,14 @@ func _execute_action(
 				return false
 			var stat_value := _scaled_action_value(owner, action.value)
 			target.stat_modifiers.add_flat(action.stat_name, stat_value)
+			## 临时抬 max_hp 时同步抬当前生命（承伤感近似；负值只 clamp）。
+			if action.stat_name == &"max_hp" and stat_value > 0:
+				target.current_hp = mini(
+					target.get_effective_max_hp(),
+					target.current_hp + stat_value,
+				)
+			else:
+				target.current_hp = clampi(target.current_hp, 0, target.get_effective_max_hp())
 			print(
 				"[Effect] %s +%d %s (eff atk=%d hp=%d/%d)"
 				% [
@@ -525,7 +620,9 @@ func _execute_action(
 			if _pipeline == null or target == null or not target.is_alive():
 				return false
 			var damage_value := _resolve_damage_value(owner, action)
+			_suppress_deal_damage_triggers += 1
 			_pipeline.apply_rolled_damage(owner, target, damage_value)
+			_suppress_deal_damage_triggers = maxi(0, _suppress_deal_damage_triggers - 1)
 			print(
 				"[Effect] %s deals %d to %s (hp=%d)"
 				% [

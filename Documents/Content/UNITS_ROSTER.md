@@ -5,7 +5,7 @@
 > **本版不写**：被动挂载；敌方 Boss 高威胁位（另册）。技能效果正文见 [UNIT_ABILITIES_ROSTER.md](./UNIT_ABILITIES_ROSTER.md)，本篇只写挂载关系。  
 > **【主题】** 中世纪魔幻（可含亡灵 / 王权 / 魔物佣兵 / 野兽坐骑）；剪影可读优先；显示名宜短（约 2～3 字）。  
 > **【1:1 挂载】** 除白板外，每条主技能恰好挂一名友方；技能池条目见技能库，挂载见 §6。  
-> **【资源 As-Is】** 现网仅 **十人** 已有 `resources/units/realtime/`（英文 id 未改）；显示名 / 新十四人 / 新技能绑槽为 **Content To-Be**，落资源另开切片。资源若仍有 `command_cost`，主路径应忽略。
+> **【资源】** 二十四人已写入 `resources/units/realtime/`（英文 id 见 §4）；显示名已对齐。技能绑槽见 §6（弩手掩护射击仍空，待管线）。资源若仍有 `command_cost`，主路径应忽略。
 
 ## 1. 范围与共识
 
@@ -52,11 +52,10 @@
 ## 3. 数值草案
 
 长度单位：格；时间单位：秒。字段含义见 Features/UNITS。  
-**原十人**战斗属性与 `resources/units/realtime/` **已对齐**（资源显示名可能仍为旧军制占位）。  
-**新十四人**为 Content 数值草案，**尚未**写入资源。  
-表含商店**花费 / 品阶**；无号令列。
+战斗属性与花费/品阶以 `resources/units/realtime/` 为准回写；下表与资源对齐。  
+表含商店**花费 / 品阶**；无号令列。移速栏为设计语；资源字段为 `steps_per_turn`（慢/中→1，骑手→2）。
 
-### 3.1 原十人（资源已有 · 显示名已更）
+### 3.1 原十人
 
 | 显示名 | 生命 | 攻击 | 移速 | 攻间隔 | 前摇 | 攻击距离 | 索敌 | 碰撞半径 | 质量 | 弹速 | 溅射 | 花费 | 品阶 |
 |--------|------|------|------|--------|------|----------|------|----------|------|------|------|------|------|
@@ -71,7 +70,7 @@
 | 枯骨 | 1 | 1 | 1.3 | 0.85 | 0.25 | 0.5 | 5.5 | 0.3 | 0.5 | 0 | 0 | 1 | 1 |
 | 骑手 | 3 | 4 | 2.0 | 0.75 | 0.2 | 0.6 | 5.5 | 0.4 | 1.4 | 0 | 0 | 3 | 2 |
 
-### 3.2 新十四人（Content 草案 · 资源未建）
+### 3.2 新十四人
 
 | 显示名 | 生命 | 攻击 | 移速 | 攻间隔 | 前摇 | 攻击距离 | 索敌 | 碰撞半径 | 质量 | 弹速 | 溅射 | 花费 | 品阶 |
 |--------|------|------|------|--------|------|----------|------|----------|------|------|------|------|------|
@@ -120,24 +119,24 @@
 | 枯骨 | `skeleton.tres` | `skeleton` |
 | 骑手 | `rider.tres` | `rider` |
 
-### 4.2 新十四人（资源未建 · 建议 id）
+### 4.2 新十四人
 
-| 显示名 | 建议资源 id |
-|--------|-------------|
-| 刺盾 | `spike_shield` |
-| 石甲 | `rune_plate` |
-| 旗手 | `banner` |
-| 圣骸 | `relic_aegis` |
-| 号手 | `dirge_horn` |
-| 鼓手 | `wardrum` |
-| 弩手 | `crossbow` |
-| 猎手 | `hunter` |
-| 巨锤 | `maul` |
-| 掘墓 | `gravewright` |
-| 召魂 | `soulcaller` |
-| 残影 | `echo_spear` |
-| 禁卫 | `mirror_warden` |
-| 骑弓 | `horsebow` |
+| 显示名 | 资源文件 | 资源 id |
+|--------|----------|---------|
+| 刺盾 | `spike_shield.tres` | `spike_shield` |
+| 石甲 | `rune_plate.tres` | `rune_plate` |
+| 旗手 | `banner.tres` | `banner` |
+| 圣骸 | `relic_aegis.tres` | `relic_aegis` |
+| 号手 | `dirge_horn.tres` | `dirge_horn` |
+| 鼓手 | `wardrum.tres` | `wardrum` |
+| 弩手 | `crossbow.tres` | `crossbow` |
+| 猎手 | `hunter.tres` | `hunter` |
+| 巨锤 | `maul.tres` | `maul` |
+| 掘墓 | `gravewright.tres` | `gravewright` |
+| 召魂 | `soulcaller.tres` | `soulcaller` |
+| 残影 | `echo_spear.tres` | `echo_spear` |
+| 禁卫 | `mirror_warden.tres` | `mirror_warden` |
+| 骑弓 | `horsebow.tres` | `horsebow` |
 
 敌方遭遇可复用上表模板。Boss 占位 `giant_knight.tres`（铁甲统领），细则另册。
 
@@ -150,7 +149,7 @@
 
 > 效果与相对强度见 [UNIT_ABILITIES_ROSTER.md](./UNIT_ABILITIES_ROSTER.md)。  
 > 流派名仅内部备注，不对玩家 UI 露出。  
-> **【资源已挂】** 仅原九人（不含枯骨）的旧技能 id 已写入 realtime `ability`；新十四人与新六技能、以及「援军呼应」触发改写，均为 **To-Be**。
+> **【资源已挂】** 除弩手（掩护射击待管线、ability 空）与枯骨（白板）外，二十二人主技能已绑到对应 `.tres`。援军呼应为 `deploy_self_atk_small`（OnSummoned）。
 
 | 显示名 | 主技能 | 技能 id（暂定） | 内部备注 | 挂载理由（摘要） |
 |--------|--------|-----------------|----------|------------------|
