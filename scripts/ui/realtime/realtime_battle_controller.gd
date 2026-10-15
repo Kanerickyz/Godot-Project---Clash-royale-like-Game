@@ -17,6 +17,8 @@ const DEFAULT_BOARD_SIZE := Vector2i(9, 16)
 @export var rng_seed: int = 0
 ## 战斗推进倍速（仅表现层；不影响结果）
 @export_range(0.25, 8.0, 0.25) var time_scale: float = 1.0
+## 胜后半场退出动画秒数；≤0 跳过（测试可用）。
+@export_range(0.0, 2.0, 0.05) var half_exit_seconds: float = 0.5
 
 var last_seed: int = 0
 
@@ -344,12 +346,20 @@ func try_start_combat() -> bool:
 	return true
 
 
-## 结算后“继续”：释放本场战斗并发出 encounter_completed。
+## 结算后“继续”：胜则先播半场退出，再释放本场并发出 encounter_completed。
+## 无 await：半场演出用 Tween 回调，避免 headless 测试卡在空协程上。
 func continue_after_result() -> void:
 	if _phase != Phase.RESULT:
 		return
 	var won := _won
 	_result_overlay.visible = false
+	if won and half_exit_seconds > 0.001 and _arena != null:
+		_play_half_field_exit_then_continue(won, half_exit_seconds)
+		return
+	_complete_continue(won)
+
+
+func _complete_continue(won: bool) -> void:
 	_teardown_sim()
 	_card_flow.clear()
 	_slots.clear()
@@ -357,7 +367,51 @@ func continue_after_result() -> void:
 	_enemy_spawns.clear()
 	_rebuild_cards()
 	_set_phase(Phase.IDLE)
+	if _arena != null:
+		_arena.reset_half_slide()
 	encounter_completed.emit(won)
+
+
+func _play_half_field_exit_then_continue(won: bool, seconds: float) -> void:
+	_arena.reset_half_slide()
+	var travel := maxf(_arena.size.y * 0.65, 220.0)
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.set_ease(Tween.EASE_IN)
+	tween.set_trans(Tween.TRANS_CUBIC)
+	tween.tween_property(_arena, "enemy_half_slide_y", -travel, seconds)
+	tween.tween_property(_arena, "ally_half_slide_y", travel, seconds)
+	## 属性 Tween 时手动 redraw
+	tween.tween_method(_redraw_arena_half_slide, 0.0, 1.0, seconds)
+	tween.chain().tween_callback(_complete_continue.bind(won))
+
+
+func _redraw_arena_half_slide(_t: float) -> void:
+	if _arena != null:
+		_arena.queue_redraw()
+
+
+## 敌半场向上、友半场向下移出摄像范围（可读占位演出）；供外部 await。
+func play_half_field_exit_animation(duration: float = -1.0) -> void:
+	if _arena == null:
+		return
+	var seconds := half_exit_seconds if duration < 0.0 else duration
+	if seconds <= 0.001:
+		return
+	_arena.reset_half_slide()
+	var travel := maxf(_arena.size.y * 0.65, 220.0)
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.set_ease(Tween.EASE_IN)
+	tween.set_trans(Tween.TRANS_CUBIC)
+	tween.tween_property(_arena, "enemy_half_slide_y", -travel, seconds)
+	tween.tween_property(_arena, "ally_half_slide_y", travel, seconds)
+	tween.tween_method(_redraw_arena_half_slide, 0.0, 1.0, seconds)
+	await tween.finished
+	if _arena != null:
+		_arena.enemy_half_slide_y = -travel
+		_arena.ally_half_slide_y = travel
+		_arena.queue_redraw()
 
 
 # --- 流程 ---

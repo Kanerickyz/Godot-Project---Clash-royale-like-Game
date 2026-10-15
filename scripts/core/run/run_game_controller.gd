@@ -2,20 +2,27 @@ class_name RunGameController
 extends Node
 
 const BATTLE_SCENE := preload("res://scenes/combat/realtime/realtime_battle.tscn")
+const RECRUIT_SCENE := preload("res://scenes/ui/recruit/recruit_screen.tscn")
 const DEFAULT_RUN_MAP := preload("res://resources/runs/act1_map.tres")
 const DEFAULT_DECK_CONFIG := preload("res://resources/deck/realtime_starter_deck.tres")
 const DEFAULT_ECONOMY := preload("res://resources/economy/default_economy.tres")
+const DEFAULT_RECRUIT_CONFIG := preload("res://resources/recruit/default_recruit_config.tres")
 
 @onready var _battle_root: Control = %BattleRoot
 @onready var _map_screen: MapScreen = %MapScreen
 @onready var _placeholder_screen: PlaceholderNodeScreen = %PlaceholderNodeScreen
 @onready var _run_end_overlay: RunEndOverlay = %RunEndOverlay
+@onready var _ui_layer: CanvasLayer = $UI
 
 var run_controller: RunController = RunController.new()
 var deck_state: DeckState = DeckState.new()
 var run_economy: RunEconomy = RunEconomy.new()
+var recruit_config: RecruitConfig = DEFAULT_RECRUIT_CONFIG
 var _battle: RealtimeBattleController
+var _recruit_screen: RecruitScreen
+var _recruit_session: RecruitSession = RecruitSession.new()
 var _rng := RandomNumberGenerator.new()
+var _recruit_busy: bool = false
 
 
 func _ready() -> void:
@@ -28,7 +35,16 @@ func _ready() -> void:
 		push_error("RunGameController: battle scene is not RealtimeBattleController")
 		return
 	_battle_root.add_child(_battle)
+	if recruit_config != null:
+		_battle.half_exit_seconds = recruit_config.half_exit_seconds
 	_battle.encounter_completed.connect(_on_encounter_completed)
+
+	_recruit_screen = RECRUIT_SCENE.instantiate() as RecruitScreen
+	if _recruit_screen == null:
+		push_error("RunGameController: recruit scene is not RecruitScreen")
+		return
+	_ui_layer.add_child(_recruit_screen)
+	_recruit_screen.finished.connect(_on_recruit_finished)
 
 	run_controller.configure(DEFAULT_RUN_MAP, _rng.randi())
 	run_controller.phase_changed.connect(_on_run_phase_changed)
@@ -59,6 +75,8 @@ func _show_map() -> void:
 func _hide_encounter_ui() -> void:
 	_map_screen.hide_map()
 	_placeholder_screen.hide_placeholder()
+	if _recruit_screen != null:
+		_recruit_screen.hide_recruit()
 	if run_controller.phase != RunController.RunPhase.RUN_COMPLETE \
 			and run_controller.phase != RunController.RunPhase.RUN_DEFEAT:
 		_run_end_overlay.hide_overlay()
@@ -93,14 +111,51 @@ func _on_placeholder_continue() -> void:
 
 
 func _on_encounter_completed(won: bool) -> void:
-	_battle_root.visible = false
 	if not won:
+		_battle_root.visible = false
 		run_controller.fail_run()
 		return
+
 	var node := run_controller.get_pending_node()
 	var encounter := node.get_encounter() if node != null else null
 	if encounter != null and encounter.bonus_gold > 0:
 		run_economy.grant(encounter.bonus_gold)
+
+	var node_type := run_controller.get_pending_node_type()
+	if not _recruit_session.should_offer_recruit(node_type, true):
+		_battle_root.visible = false
+		run_controller.complete_encounter()
+		return
+
+	await _open_recruit()
+
+
+func _open_recruit() -> void:
+	if _recruit_busy:
+		return
+	_recruit_busy = true
+	_battle_root.visible = false
+	_map_screen.hide_map()
+	_placeholder_screen.hide_placeholder()
+
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _rng.randi()
+	_recruit_session.configure(recruit_config, deck_state, run_economy, rng)
+	_recruit_session.begin(_recruit_progress_ratio())
+	var enter_s := recruit_config.panel_enter_seconds if recruit_config != null else 0.45
+	await _recruit_screen.show_recruit(_recruit_session, enter_s)
+
+
+func _recruit_progress_ratio() -> float:
+	var floors := 12
+	if run_controller.map_config != null:
+		floors = maxi(1, run_controller.map_config.floor_count)
+	var depth := run_controller.run_state.completed_encounter_count
+	return clampf(float(depth) / float(floors), 0.0, 1.0)
+
+
+func _on_recruit_finished(_kept: bool) -> void:
+	_recruit_busy = false
 	run_controller.complete_encounter()
 
 
@@ -111,10 +166,14 @@ func _on_run_phase_changed(new_phase: RunController.RunPhase) -> void:
 		RunController.RunPhase.RUN_COMPLETE:
 			_battle_root.visible = false
 			_map_screen.hide_map()
+			if _recruit_screen != null:
+				_recruit_screen.hide_recruit()
 			_run_end_overlay.show_victory()
 		RunController.RunPhase.RUN_DEFEAT:
 			_battle_root.visible = false
 			_map_screen.hide_map()
+			if _recruit_screen != null:
+				_recruit_screen.hide_recruit()
 			_run_end_overlay.show_defeat()
 
 

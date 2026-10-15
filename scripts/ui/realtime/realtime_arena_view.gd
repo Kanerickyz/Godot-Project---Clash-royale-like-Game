@@ -53,6 +53,9 @@ var prepare_slots: PrepareSlotBoard
 var enemy_slots: PrepareSlotBoard
 ## 战斗加速倍率：缩短反馈 / 时停表现寿命；是否暂停模拟由控制器时停队列决定。
 var presentation_time_scale: float = 1.0
+## 胜后半场退出演出：敌半场向上、友半场向下的像素位移（由控制器 Tween）。
+var enemy_half_slide_y: float = 0.0
+var ally_half_slide_y: float = 0.0
 
 var _hover_cell: Vector2i = NO_CELL
 var _drag_active: bool = false
@@ -300,18 +303,28 @@ func _drop_data(at_position: Vector2, data: Variant) -> void:
 # --- 绘制 ---
 
 
+func reset_half_slide() -> void:
+	enemy_half_slide_y = 0.0
+	ally_half_slide_y = 0.0
+	queue_redraw()
+
+
 func _draw() -> void:
 	var rect := get_board_rect()
 	var px := get_cell_px()
 	var mid := BoardHalf.midline_row(board_size.y)
+	var enemy_off := Vector2(0.0, enemy_half_slide_y)
+	var ally_off := Vector2(0.0, ally_half_slide_y)
 	draw_rect(rect.grow(2.0), BORDER)
+	## 半场草色与单位随 slide 移出摄像范围；中线/边框保持便于读「离开战场」。
 	for y in board_size.y:
+		var half_off := enemy_off if y < mid else ally_off
 		for x in board_size.x:
-			var cell_rect := Rect2(rect.position + Vector2(x, y) * px, Vector2(px, px))
+			var cell_rect := Rect2(rect.position + Vector2(x, y) * px + half_off, Vector2(px, px))
 			draw_rect(cell_rect, GRASS_A if (x + y) % 2 == 0 else GRASS_B)
-	draw_rect(Rect2(rect.position, Vector2(rect.size.x, mid * px)), ENEMY_TINT)
+	draw_rect(Rect2(rect.position + enemy_off, Vector2(rect.size.x, mid * px)), ENEMY_TINT)
 	draw_rect(
-		Rect2(rect.position + Vector2(0, mid * px), Vector2(rect.size.x, (board_size.y - mid) * px)),
+		Rect2(rect.position + Vector2(0, mid * px) + ally_off, Vector2(rect.size.x, (board_size.y - mid) * px)),
 		PLAYER_TINT,
 	)
 	for x in range(1, board_size.x):
@@ -324,7 +337,7 @@ func _draw() -> void:
 	var showing_placement := placement_active or _drag_active
 	if showing_placement:
 		draw_rect(
-			Rect2(rect.position + Vector2(0, mid * px), Vector2(rect.size.x, (board_size.y - mid) * px)),
+			Rect2(rect.position + Vector2(0, mid * px) + ally_off, Vector2(rect.size.x, (board_size.y - mid) * px)),
 			DEPLOY_HIGHLIGHT,
 		)
 	var mid_y := rect.position.y + mid * px
@@ -338,10 +351,10 @@ func _draw() -> void:
 		var vwx := float(preview.get("visual_half_width", 0.0))
 		var vhy := float(preview.get("visual_half_height", 0.0))
 		_draw_body(
-			preview["position"], body_r, vwx, vhy, ENEMY_COLOR, 0.35, String(preview["label"]), px, false,
+			preview["position"], body_r, vwx, vhy, ENEMY_COLOR, 0.35, String(preview["label"]), px, false, enemy_off,
 		)
 		_draw_stat_badges(
-			tile_to_local(preview["position"]),
+			tile_to_local(preview["position"]) + enemy_off,
 			maxf(vwx, vhy) * px,
 			int(preview.get("attack", 0)),
 			int(preview.get("hp", 0)),
@@ -363,9 +376,10 @@ func _draw_enemy_slots(px: float) -> void:
 		return
 	var occupied := _enemy_preview_seat_set()
 	var rect := get_board_rect()
+	var off := Vector2(0.0, enemy_half_slide_y)
 	for i in enemy_slots.cells.size():
 		var cell: Vector2i = enemy_slots.cells[i]
-		var cell_rect := Rect2(rect.position + Vector2(cell) * px, Vector2(px, px))
+		var cell_rect := Rect2(rect.position + Vector2(cell) * px + off, Vector2(px, px))
 		var filled := occupied.has(i)
 		draw_rect(cell_rect, ENEMY_SLOT_OCCUPIED if filled else ENEMY_SLOT_EMPTY)
 		draw_rect(cell_rect, ENEMY_SLOT_BORDER, false, 1.5)
@@ -385,10 +399,11 @@ func _draw_prepare_slots(px: float) -> void:
 	if prepare_slots == null or prepare_slots.cells.is_empty():
 		return
 	var rect := get_board_rect()
+	var off := Vector2(0.0, ally_half_slide_y)
 	for i in prepare_slots.cells.size():
 		var cell: Vector2i = prepare_slots.cells[i]
 		var entry: DeckEntry = prepare_slots.get_entry(i)
-		var cell_rect := Rect2(rect.position + Vector2(cell) * px, Vector2(px, px))
+		var cell_rect := Rect2(rect.position + Vector2(cell) * px + off, Vector2(px, px))
 		draw_rect(cell_rect, SLOT_OCCUPIED if entry != null else SLOT_EMPTY)
 		draw_rect(cell_rect, SLOT_BORDER, false, 2.0)
 		if entry != null and (sim == null or not sim.has_started()):
@@ -398,7 +413,7 @@ func _draw_prepare_slots(px: float) -> void:
 			var vwx := stats.get_visual_half_width() if stats != null else 0.0
 			var vhy := stats.get_visual_half_height() if stats != null else 0.0
 			_draw_body(
-				center_tile, radius, vwx, vhy, PLAYER_COLOR, 0.75, entry.get_display_name(), px, true,
+				center_tile, radius, vwx, vhy, PLAYER_COLOR, 0.75, entry.get_display_name(), px, true, off,
 			)
 			var atk := 0
 			var hp := 0
@@ -406,7 +421,7 @@ func _draw_prepare_slots(px: float) -> void:
 				atk = maxi(1, stats.attack + entry.bonus_attack)
 				hp = maxi(1, stats.max_hp + entry.bonus_max_hp)
 			_draw_stat_badges(
-				tile_to_local(center_tile), maxf(vwx, vhy) * px, atk, hp, 0.95, px,
+				tile_to_local(center_tile) + off, maxf(vwx, vhy) * px, atk, hp, 0.95, px,
 			)
 
 
@@ -425,8 +440,9 @@ func _draw_units(px: float) -> void:
 			base = base.lerp(Color.WHITE, 0.5)
 		var vwx := rt.get_visual_half_width()
 		var vhy := rt.get_visual_half_height()
-		_draw_body(rt.position, rt.get_radius(), vwx, vhy, base, alpha, rt.get_display_name(), px, true)
-		var center := tile_to_local(rt.position)
+		var off := Vector2(0.0, ally_half_slide_y if rt.is_player() else enemy_half_slide_y)
+		_draw_body(rt.position, rt.get_radius(), vwx, vhy, base, alpha, rt.get_display_name(), px, true, off)
+		var center := tile_to_local(rt.position) + off
 		var silhouette_r_px := maxf(vwx, vhy) * px
 		if started and rt.is_deploying():
 			var ratio := rt.get_deploy_ratio()
@@ -447,8 +463,9 @@ func _draw_body(
 	label: String,
 	px: float,
 	show_foot: bool,
+	pixel_offset: Vector2 = Vector2.ZERO,
 ) -> void:
-	var center := tile_to_local(tile_pos)
+	var center := tile_to_local(tile_pos) + pixel_offset
 	var rx := maxf(3.0, _resolve_visual_half(visual_half_width, body_radius, 1.3) * px)
 	var ry := maxf(3.0, _resolve_visual_half(visual_half_height, body_radius, 1.6) * px)
 	var fill := Color(color, alpha)
