@@ -1,8 +1,8 @@
 # Project Autochess — 文档索引
 
-> 中世纪幻想 2D PvE 自走棋（构筑 + 准备入槽观战 + 清波制）· Godot 4.6 · 最后更新：2026-10-14
+> 中世纪幻想 2D PvE 自走棋（养队 + 准备站位观战 + 清波制）· Godot 4.6 · 最后更新：2026-10-15
 >
-> 玩法以 [GAME_VISION.md](./GAME_VISION.md) 与 Features 定稿为准；**玩家拥有物与准备牌流（构筑库 / 手牌 / 弃牌堆、角色座位、上场人数上限、刷新）** 见 [Features/PLAYER.md](./Features/PLAYER.md)（To-Be；As-Is 仍为战中号令出牌）。实时主路径角色库见 [Content/UNITS_ROSTER.md](./Content/UNITS_ROSTER.md)（资源显示名可能仍为旧占位）。
+> 玩法以 [GAME_VISION.md](./GAME_VISION.md) 与 Features 定稿为准；**玩家拥有物与准备布阵（队伍 / 队伍席位上限 / 角色座位 / 全体上场）** 见 [Features/PLAYER.md](./Features/PLAYER.md)（To-Be；As-Is 仍为战中号令出牌与牌库/手牌中介）。实时主路径角色库见 [Content/UNITS_ROSTER.md](./Content/UNITS_ROSTER.md)（资源显示名可能仍为旧占位）。
 
 ## 快速导航
 
@@ -11,7 +11,7 @@
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | 当前工程状态、推荐目录树、核心系统划分 |
 | [DEVELOPMENT_WORKFLOW.md](./DEVELOPMENT_WORKFLOW.md) | Agent 职责、纵切片流程、L0–L5、**轻量/完全验收** |
 | [GAME_VISION.md](./GAME_VISION.md) | 主循环、**清波胜负**、单局时长、流派联动、棋盘与敌压 |
-| [Features/PLAYER.md](./Features/PLAYER.md) | **玩家**（构筑库 / 手牌 / 弃牌堆、角色座位、上场人数上限、准备刷新、开战观战） |
+| [Features/PLAYER.md](./Features/PLAYER.md) | **玩家**（队伍 / 队伍席位上限、角色座位、全体上场、准备站位、开战观战） |
 | [Features/UNITS.md](./Features/UNITS.md) | **角色单位**（友方角色 / 敌方角色 / 生成的代理角色；属性与行为规则；功能与数值分离） |
 | [Features/UNIT_ABILITIES.md](./Features/UNIT_ABILITIES.md) | **角色技能**（自带技能/白板、事件联动、强度评估维度；具体技能归 Content） |
 | [Content/INDEX.md](./Content/INDEX.md) | **内容库索引**（与 Features 并列） |
@@ -19,7 +19,7 @@
 | [Content/UNIT_ABILITIES_ROSTER.md](./Content/UNIT_ABILITIES_ROSTER.md) | **角色技能库**（独立技能池与相对强度；挂载见角色库 §6；九人单位槽已绑） |
 | [Features/GAME_LOOP.md](./Features/GAME_LOOP.md) | **游戏基础循环**（局外 / 一整局地图 / 节点内自走棋；主模式 vs 线性工具环） |
 | [Features/MAP.md](./Features/MAP.md) | **地图与节点**（选路结构；起点/战斗/精英/Boss/商店/事件/附魔） |
-| [Features/COMBAT.md](./Features/COMBAT.md) | **战斗**（准备入槽 → 自动战斗观战 → 结算） |
+| [Features/COMBAT.md](./Features/COMBAT.md) | **战斗**（准备站位 → 自动战斗观战 → 结算） |
 | [Features/COMBAT_FEEDBACK.md](./Features/COMBAT_FEEDBACK.md) | **战斗观战反馈**（技能结果数字 + 稀有短提示；本版无普攻飘字/战斗日志） |
 | [Features/COMBATLEVEL.md](./Features/COMBATLEVEL.md) | **战斗关卡**（竖屏半场、双方 2×5 角色座位、9×16、开战八向落格顿步越线） |
 | [BUFF_SYSTEM.md](./BUFF_SYSTEM.md) | **增益卡**规格、示例、附加流（文档目标） |

@@ -1,21 +1,22 @@
 # 增益卡系统
 
-> 策划与程序对齐文档。**已实现**（2026-05）：增益商店、`BuffAttachModal`、`attached_buffs`、Tier roll。
+> 策划与程序对齐文档。**已实现**（2026-05）：增益商店、`BuffAttachModal`、`attached_buffs`、Tier roll。  
+> **【设计 To-Be】** 挂载对象为**队伍成员**（见 [Features/PLAYER.md](./Features/PLAYER.md)）；**【As-Is】** 实现与下文仍多用「牌库条目 / `DeckEntry`」命名，回摆时语义对齐队伍成员即可。
 
-相关文档：[GAME_VISION.md](./GAME_VISION.md) · [Features/UNIT_ABILITIES.md](./Features/UNIT_ABILITIES.md)（角色技能规则）· [ARCHITECTURE.md](./ARCHITECTURE.md)（模块边界 · 商店摘要）· [Reference/SAP_SHOP_SYSTEM.md](./Reference/SAP_SHOP_SYSTEM.md)（SAP Food 对照）
+相关文档：[GAME_VISION.md](./GAME_VISION.md) · [Features/PLAYER.md](./Features/PLAYER.md) · [Features/UNIT_ABILITIES.md](./Features/UNIT_ABILITIES.md)（角色技能规则）· [ARCHITECTURE.md](./ARCHITECTURE.md)（模块边界 · 商店摘要）· [Reference/SAP_SHOP_SYSTEM.md](./Reference/SAP_SHOP_SYSTEM.md)（SAP Food 对照）
 
 ---
 
 ## 1. 概述
 
-**增益卡**是商店可购的强化商品，购买后附加到牌库内某一**角色条目**（`DeckEntry`），在 Run 内持久生效（直至该条目被出售或替换移除）。
+**增益卡**是商店可购的强化商品，购买后附加到某一**队伍成员**（As-Is 实现类型名多为 `DeckEntry`），在一整局里持久生效（直至该成员被出售或替换移除）。
 
 与 **技能** 的分工：
 
 | 类型 | 来源 | 作用 |
 |------|------|------|
 | **技能（Ability）** | 单位主技能 / 被动（可空；见 [角色技能](./Features/UNIT_ABILITIES.md)） | 战斗内事件联动（受伤、死亡等） |
-| **增益卡（Buff）** | 商店购买，挂到 `DeckEntry` | 永久属性、规则标签、或战斗触发的 Run 级效果 |
+| **增益卡（Buff）** | 商店购买，挂到队伍成员 | 永久属性、规则标签、或战斗触发的整局级效果 |
 
 **商店不再出售技能卡**；原 `skill_pool` / `SkillAttachModal` / `attached_skills` 在文档与后续实现中由增益体系替代。
 
