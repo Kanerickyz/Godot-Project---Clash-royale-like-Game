@@ -33,6 +33,7 @@
 - 共享 `Resource` 进入运行时实例前判断是否需 `duplicate()`。
 - 视觉效果保持 **GL Compatibility**（WebGL 2）可用；不要依赖仅 Forward Plus 的特性。
 - 2D 精灵与图标放 `assets/`；源文件/概念图放 `art_source/`。生成脚本会覆盖同名文件时，执行前核对范围并保留原资产。
+- 浏览器试玩见 [Documents/WEB_DEPLOY.md](Documents/WEB_DEPLOY.md)；Web 导出预设名 `Web`。
 - Python 工具沿用 stdlib 风格，路径相对脚本根目录。
 
 ## Cursor
