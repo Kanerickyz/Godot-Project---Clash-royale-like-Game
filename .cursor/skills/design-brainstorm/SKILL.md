@@ -17,11 +17,11 @@ description: Runs a design brainstorm with studio roles (usually game-designer).
 
 - **不改代码、不改 `resources/`、不改场景**；未经用户明确授权也不落盘设计规格正文（可建/更新本 skill 或对话内共识摘要）。
 - 遵守 [Documents/DEVELOPMENT_WORKFLOW.md](../../Documents/DEVELOPMENT_WORKFLOW.md)「养成规范」：当前不做的默认不写进规格；区分【愿景已有】/【用户新共识】/【建议】/【As-Is】。
-- 玩法以 [Documents/GAME_VISION.md](../../Documents/GAME_VISION.md) 定稿为准；发现 Features 与愿景冲突要标出，不假装已对齐。
+- 玩法以落盘愿景 / Features 为准（若有）；发现冲突要标出，不假装已对齐。
 
 ## 过程
 
-1. 读愿景与相关 Features / 商店等短文，标清已有边界。
+1. 读已有愿景与相关 Features（若有），标清已有边界。
 2. 用玩家语言重述要讨论的体验（操作、胜负、节奏、爽点），少堆内部标识。
 3. 给出短诊断 + 可选方向（或唯一推荐草案），**不要**一上来写完整规格章节。
 4. **随时提出**：对用户表述的补充、疑问、风险与建议——不必等用户问完再统一提问；每轮最多 **1–2 个**尖锐跟进问题。
@@ -39,11 +39,7 @@ description: Runs a design brainstorm with studio roles (usually game-designer).
 
 ## 返回结构（给主代理转述）
 
-```text
-A. 议题一句话（玩家体验）
-B. 已有文档边界（愿景 / Features / As-Is）
-C. 头脑风暴要点（爽点、风险、可选方向或推荐草案）
-D. 补充 / 疑问 / 建议（主动提出）
-E. 1–2 个跟进问题
-F. 尚未落盘；下一步是否写 Feature 文档待用户授权
-```
+- 共识摘要（已拍板）
+- 开放问题
+- 建议项（标【建议】）
+- 下一步（是否落盘 Features / 是否转 implement）

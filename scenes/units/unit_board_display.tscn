@@ -1,6 +1,0 @@
-[gd_scene format=3 uid="uid://pwf5xa0txtw3"]
-
-[ext_resource type="Script" path="res://scripts/units/unit_board_display.gd" id="1_script"]
-
-[node name="UnitBoardDisplay" type="Node2D"]
-script = ExtResource("1_script")

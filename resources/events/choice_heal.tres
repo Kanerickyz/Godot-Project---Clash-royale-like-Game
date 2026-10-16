@@ -1,8 +1,0 @@
-[gd_resource type="Resource" script_class="EventChoice" format=3 uid="uid://cgq4cfdw3bbyv"]
-
-[ext_resource type="Script" uid="uid://b7fqvx2e4skte" path="res://scripts/data/event_choice.gd" id="1"]
-
-[resource]
-script = ExtResource("1")
-label = "祈祷恢复（下一场战斗前回满生命）"
-effect_type = 3

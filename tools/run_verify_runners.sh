@@ -5,30 +5,11 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 GODOT_BIN="${GODOT_BIN:-godot}"
 cd "$ROOT"
 
-# 新 clone 尚无导入缓存时，preload 的贴图会解析失败。
+# Fresh clones need import cache before textured resources resolve.
 "$GODOT_BIN" --headless --path . --import >/dev/null 2>&1 || true
 
 runners=(
-  "res://scripts/combat/effect_resolver_faint_test_runner.gd"
-  "res://scripts/combat/effect_resolver_bomber_test_runner.gd"
-  "res://scripts/combat/grid_movement_test_runner.gd"
-  "res://scripts/combat/attack_range_preview_test_runner.gd"
-  "res://scripts/combat/combat_movement_tests_runner.gd"
-  "res://scripts/combat/combat_bus_lifecycle_test_runner.gd"
-  "res://scripts/combat/realtime/realtime_combat_sim_test_runner.gd"
-  "res://scripts/combat/realtime/realtime_ability_effect_test_runner.gd"
-  "res://scripts/ui/realtime/realtime_battle_flow_test_runner.gd"
-  "res://scripts/ui/realtime/recruit_arena_transition_test_runner.gd"
-  "res://scripts/ui/realtime/opening_recruit_flow_test_runner.gd"
-  "res://scripts/ui/realtime/realtime_combat_feedback_test_runner.gd"
-  "res://scripts/ui/realtime/unit_art_catalog_test_runner.gd"
-  "res://scripts/ui/realtime/realtime_unit_motion_test_runner.gd"
-  "res://scripts/core/board_grid_distance_test_runner.gd"
-  "res://scripts/core/draw_service_test_runner.gd"
-  "res://scripts/core/run/map_generator_test_runner.gd"
-  "res://scripts/core/run/recruit_session_test_runner.gd"
-  "res://scripts/core/run/sacrifice_service_test_runner.gd"
-  "res://scripts/core/wfc/wfc_generator_test_runner.gd"
+  "res://scripts/core/project_load_smoke_test_runner.gd"
 )
 
 failed=0
