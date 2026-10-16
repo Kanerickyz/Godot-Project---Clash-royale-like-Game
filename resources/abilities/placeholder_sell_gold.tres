@@ -1,9 +1,0 @@
-[gd_resource type="Resource" script_class="AbilityData" format=3 uid="uid://b2suybhqywbe4"]
-
-[ext_resource type="Script" uid="uid://crxnpxb4fci0f" path="res://scripts/data/ability_data.gd" id="1_ab"]
-[ext_resource type="Script" uid="uid://bgp64ty0hqbey" path="res://scripts/data/effect_spec.gd" id="1_uaeyl"]
-
-[resource]
-script = ExtResource("1_ab")
-id = "placeholder_sell_gold"
-display_name = "出售时 获得 +1 金（商店阶段待实现）"

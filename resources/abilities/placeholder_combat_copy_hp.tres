@@ -1,9 +1,0 @@
-[gd_resource type="Resource" script_class="AbilityData" format=3 uid="uid://txvkdd76qh53"]
-
-[ext_resource type="Script" uid="uid://crxnpxb4fci0f" path="res://scripts/data/ability_data.gd" id="1_ab"]
-[ext_resource type="Script" uid="uid://bgp64ty0hqbey" path="res://scripts/data/effect_spec.gd" id="1_na6ca"]
-
-[resource]
-script = ExtResource("1_ab")
-id = "placeholder_combat_copy_hp"
-display_name = "开战时 复制最健康队友 50% 生命（待实现）"

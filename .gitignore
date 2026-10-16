@@ -16,3 +16,6 @@
 # Python
 __pycache__/
 *.pyc
+
+# Godot CI download cache
+.github/.godot-cache/

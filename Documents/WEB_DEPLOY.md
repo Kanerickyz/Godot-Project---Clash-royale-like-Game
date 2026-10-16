@@ -12,13 +12,9 @@
 
 推送到 `main`，或到 **Actions → Deploy Web → Run workflow**，都会构建并尝试部署。
 
-预期地址（仓库名 `project-autochess`）：
-
-`https://kanerickyz.github.io/project-autochess/`
-
 ## 私有仓库注意
 
-当前仓库是 **Private**。GitHub Pages 对私有库需要 **Pro / Team / Enterprise**（免费账号仅 Public 可用 Pages）。
+当前仓库若是 **Private**：GitHub Pages 对私有库需要 **Pro / Team / Enterprise**（免费账号仅 Public 可用 Pages）。
 
 若 Pages 部署失败（权限 / 套餐），仍可：
 
@@ -48,8 +44,6 @@ godot --headless --path . --export-release "Web" build/web/index.html
 
 ## 已知 Web 差异
 
-- 主菜单 **退出** 在 Web 上隐藏（浏览器无法可靠关标签）。
+- 浏览器无法可靠关闭标签；若 UI 有「退出」需在 Web 上隐藏或改成提示。
 - 全屏依赖用户手势；启动时不会自动全屏。
 - 无声卡 / 浏览器自动播放策略下音频可能需先点一下页面。
-- 画布仍用 Adaptive 铺满浏览器；项目默认 viewport 为 **竖屏 393×852**（iPhone 14 Pro 逻辑点），`stretch/aspect=expand`；宽屏浏览器会按 expand 铺满，布局以手机优先。
-- 试玩地址（public 库 Pages 已开）：`https://kanerickyz.github.io/project-autochess/`（推 `main` 或手动跑 Deploy Web 后更新）。

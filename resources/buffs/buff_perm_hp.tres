@@ -1,9 +1,0 @@
-[gd_resource type="Resource" script_class="BuffCardData" format=3 uid="uid://khyao2g7murl"]
-
-[ext_resource type="Script" uid="uid://c2gjlifbpdq43" path="res://scripts/data/buff_card_data.gd" id="1"]
-
-[resource]
-script = ExtResource("1")
-id = "buff_perm_hp"
-display_name = "苹果（生命）"
-effect_type = 1
