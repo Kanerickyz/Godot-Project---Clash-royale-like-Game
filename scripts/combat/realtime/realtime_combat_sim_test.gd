@@ -38,6 +38,8 @@ static func run_all() -> bool:
 	ok = _check("boss_decapitation_beats_mutual_wipe", _test_boss_decapitation_beats_mutual_wipe()) and ok
 	ok = _check("boss_push_ally_on_step", _test_boss_push_ally_on_step()) and ok
 	ok = _check("boss_summon_minions_advance", _test_boss_summon_minions_advance()) and ok
+	ok = _check("boss_footprint_horiz_centered", _test_boss_footprint_horiz_centered()) and ok
+	ok = _check("boss_visual_centers_in_footprint", _test_boss_visual_centers_in_footprint()) and ok
 	for sim in _created:
 		sim.dispose()
 	_created.clear()
@@ -1251,5 +1253,65 @@ static func _test_boss_summon_minions_advance() -> bool:
 			break
 	if not saw_move:
 		push_error("summon_advance: minion never left spawn cell %s" % str(first_cell))
+		return false
+	return true
+
+
+## 首领 2×2 足迹在 9 宽场上应水平居中（足迹中心贴近 board_cx=4）。
+static func _test_boss_footprint_horiz_centered() -> bool:
+	var sim := _new_sim()
+	sim.configure(Vector2i(9, 16), 62)
+	## 敌方前排居中座约 (4,5)
+	var boss := sim.add_unit(
+		make_unit(UnitInstance.Team.ENEMY, {
+			"id": "boss", "is_boss_leader": true, "footprint_w": 2, "footprint_h": 2,
+			"steps_per_turn": 0, "attack_reach": 1.0,
+		}),
+		Vector2(4.5, 5.5),
+	)
+	if boss == null:
+		push_error("footprint_center: boss null")
+		return false
+	var cells := boss.get_footprint_cells(boss.cell)
+	if cells.size() != 4:
+		push_error("footprint_center: expected 4 cells")
+		return false
+	var sx := 0
+	for c in cells:
+		sx += c.x
+	var fp_cx := float(sx) / float(cells.size())
+	var board_cx := 4.0
+	if absf(fp_cx - board_cx) > 0.51:
+		push_error("footprint_center: fp_cx=%s not near board center" % fp_cx)
+		return false
+	return true
+
+
+## 表现锚应落在 2×2 四格几何正中（非锚点格心）。
+static func _test_boss_visual_centers_in_footprint() -> bool:
+	var mid := RtUnit.footprint_center_for(Vector2i(3, 4), Vector2i(2, 2))
+	if mid != Vector2(4.0, 5.0):
+		push_error("visual_center: static mid=%s want (4,5)" % mid)
+		return false
+	var sim := _new_sim()
+	sim.configure(Vector2i(9, 16), 62)
+	var boss := sim.add_unit(
+		make_unit(UnitInstance.Team.ENEMY, {
+			"id": "boss", "is_boss_leader": true, "footprint_w": 2, "footprint_h": 2,
+			"steps_per_turn": 0, "attack_reach": 1.0,
+		}),
+		Vector2(4.5, 5.5),
+	)
+	if boss == null:
+		push_error("visual_center: boss null")
+		return false
+	var expect := RtUnit.footprint_center_for(boss.cell, boss.get_footprint_size())
+	if boss.position.distance_to(expect) > 0.001:
+		push_error("visual_center: pos=%s expect=%s (anchor=%s)" % [boss.position, expect, boss.cell])
+		return false
+	## 不应停在锚点格心。
+	var anchor_center := RtUnit.cell_center(boss.cell)
+	if boss.position.distance_to(anchor_center) < 0.25:
+		push_error("visual_center: still at anchor cell center %s" % boss.position)
 		return false
 	return true
