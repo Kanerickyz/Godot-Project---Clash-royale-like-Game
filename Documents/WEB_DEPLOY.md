@@ -32,6 +32,7 @@ python3 -m http.server 8080
 ## 项目侧前提
 
 - 渲染器为 **GL Compatibility**（WebGL 2；Forward Plus 无法上浏览器）。
+- `project.godot` 须开启 `textures/vram_compression/import_etc2_astc=true`。Web 预设默认勾选 mobile VRAM 压缩时，缺此开关会报 `Cannot export project with preset "Web" due to configuration errors`（错误详情常为空）。
 - 本地手动导出（需已装匹配版本的 export templates）：
 
 ```bash
