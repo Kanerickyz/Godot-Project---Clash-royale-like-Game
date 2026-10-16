@@ -155,8 +155,8 @@ flowchart TD
 | 商店出售 | 按队伍成员星级 / 等级退金（细则见商店） |
 | 招募出售 | 正常退金腾位（细则见招募篇；点数见数值） |
 
-准备阶段可买角色与道具，见 [Features/PREPARE_SHOP.md](./Features/PREPARE_SHOP.md)。  
-敌方配兵见 [Features/ENEMY_SPAWN_BUDGET.md](./Features/ENEMY_SPAWN_BUDGET.md)：普通/精英按进点瞬间的**整局队伍强度**定目标；人数约束见该文；Boss 不吃真队修正、不跟人数规则。
+胜后招募半场含角色 5 槽与道具行，见 [Features/RECRUIT_SHOP.md](./Features/RECRUIT_SHOP.md)。  
+敌方配兵见 [Features/ENEMY_SPAWN_BUDGET.md](./Features/ENEMY_SPAWN_BUDGET.md)：普通/精英按队伍强度定目标；人数约束见该文；Boss 不吃真队、不跟人数。
 
 ```
 LEVEL_LOAD → PREPARE → COMBAT → RESOLVE → … → LEVEL_COMPLETE

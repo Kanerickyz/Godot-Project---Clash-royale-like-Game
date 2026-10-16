@@ -1,6 +1,7 @@
 class_name PrepareItemData
 extends Resource
-## 准备商店道具：生命/力量药水（永久加成）与旗帜（席位上限 +1）。
+## 招募商店道具：生命/力量药水（永久加成）与旗帜（席位上限 +1）。
+## 类名保留 PrepareItemData 以兼容 .tres；主路径仅在招募阶段使用。
 
 enum ItemType {
 	HP_POTION,

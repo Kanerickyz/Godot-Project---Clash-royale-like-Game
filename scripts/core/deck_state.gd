@@ -553,7 +553,7 @@ func _remove_entries_by_ids(ids: Array) -> void:
 	_entries = kept
 
 
-## 招募进门快照：深拷贝条目（含 entry_id / 等级 / 增益 / 持久占位）。
+## 招募进门快照：深拷贝条目（含 entry_id / 等级 / 增益 / 持久占位 / 席位上限）。
 func capture_roster() -> Dictionary:
 	var copies: Array[DeckEntry] = []
 	for entry in _entries:
@@ -563,6 +563,7 @@ func capture_roster() -> Dictionary:
 		"entries": copies,
 		"next_entry_id": _next_entry_id,
 		"next_seat_seq": _next_seat_seq,
+		"seat_cap_override": _seat_cap_override,
 	}
 
 
@@ -574,6 +575,7 @@ func restore_roster(snapshot: Dictionary) -> void:
 			_entries.append(_clone_entry(item as DeckEntry))
 	_next_entry_id = int(snapshot.get("next_entry_id", _next_entry_id))
 	_next_seat_seq = int(snapshot.get("next_seat_seq", 0))
+	_seat_cap_override = int(snapshot.get("seat_cap_override", -1))
 	if _next_seat_seq <= 0:
 		for entry in _entries:
 			if entry != null:

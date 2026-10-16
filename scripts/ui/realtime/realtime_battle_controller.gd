@@ -71,9 +71,10 @@ var _recruit_finish_btn: Button
 var _recruit_selected_candidate: int = -1
 var _recruit_selected_replace_id: int = -1
 var _recruit_animating: bool = false
-var _prepare_shop: PrepareShopService = PrepareShopService.new()
-var _prepare_shop_config: PrepareShopConfig = null
-var _prepare_shop_panel: PrepareShopPanel
+## 招募半场道具行（生命/力量药水、旗帜）；不挂准备阶段。
+var _recruit_shop: RecruitShopService = RecruitShopService.new()
+var _recruit_shop_config: RecruitShopConfig = null
+var _recruit_pending_item_slot: int = -1
 
 @onready var _encounter_label: Label = %EncounterLabel
 @onready var _gold_label: Label = %GoldLabel
@@ -95,16 +96,16 @@ var _refresh_button: Button
 func _ready() -> void:
 	_arena.board_pressed.connect(_on_board_pressed)
 	_arena.card_dropped.connect(_on_card_dropped)
-	_arena.prepare_item_dropped.connect(_on_prepare_item_dropped)
 	_arena.recruit_drop.connect(_on_recruit_drop)
 	_arena.recruit_candidate_pressed.connect(_on_recruit_candidate_pressed)
 	_arena.recruit_team_pressed.connect(_on_recruit_team_pressed)
 	_arena.recruit_sell.connect(_on_recruit_sell)
 	_arena.recruit_team_seat_drop.connect(_on_recruit_team_seat_drop)
+	_arena.recruit_item_pressed.connect(_on_recruit_item_pressed)
+	_arena.recruit_item_drop.connect(_on_recruit_item_drop)
 	_start_button.pressed.connect(_on_start_pressed)
 	_continue_button.pressed.connect(_on_continue_pressed)
 	_ensure_refresh_button()
-	_ensure_prepare_shop_panel()
 	_ensure_recruit_hud()
 	_result_overlay.visible = false
 	if _start_button != null:
@@ -201,7 +202,17 @@ func start_encounter(
 	_card_flow.clear()
 	var seat_rows := config.get_seat_rows() if config != null else DeckConfig.DEFAULT_SEAT_ROWS
 	var seat_cols := config.get_seat_cols() if config != null else DeckConfig.DEFAULT_SEAT_COLS
-	_refresh_deploy_cap_from_deck()
+	## 全体上场：准备可入座人数 = 队伍席位上限（max_size ∩ 座位网格）。
+	var deck_cap := _deck_state.get_max_size()
+	var seat_grid := _deck_state.get_slot_count()
+	if deck_cap > 0 and seat_grid > 0:
+		_deploy_cap = mini(deck_cap, seat_grid)
+	elif deck_cap > 0:
+		_deploy_cap = deck_cap
+	elif seat_grid > 0:
+		_deploy_cap = seat_grid
+	else:
+		_deploy_cap = config.get_deploy_cap() if config != null else DeckConfig.DEFAULT_DEPLOY_CAP
 	_slots.configure_grid(seat_rows, seat_cols, _board_size, false)
 	_enemy_slots.configure_grid(seat_rows, seat_cols, _board_size, true)
 	_enemy_spawns = _roll_enemy_spawns(_encounter_rng)
@@ -220,7 +231,6 @@ func start_encounter(
 	_hide_recruit_hud()
 	_restore_combat_chrome_after_recruit()
 	_rebuild_cards()
-	_open_prepare_shop()
 	_set_phase(Phase.PREPARE)
 
 
@@ -539,6 +549,7 @@ func enter_recruit(session: RecruitSession, enter_seconds: float = -1.0) -> void
 	_recruit_session = session
 	_recruit_selected_candidate = -1
 	_recruit_selected_replace_id = -1
+	_recruit_pending_item_slot = -1
 	_preserve_half_slide_for_recruit = false
 	var seconds := recruit_enter_seconds if enter_seconds < 0.0 else enter_seconds
 	if session.config != null and enter_seconds < 0.0:
@@ -549,6 +560,7 @@ func enter_recruit(session: RecruitSession, enter_seconds: float = -1.0) -> void
 	## 等一帧让 Dock 最小高度生效，Arena 与准备同尺后再算 slide / 画单位。
 	await get_tree().process_frame
 	_bind_recruit_session()
+	_open_recruit_shop()
 	## 若未播退出（half_exit=0），先瞬移到屏外再滑入，保持「进出一段」。
 	## 先就位 slide，再 sync 单位：开场瞬间队伍/候选人已在半场上（屏外），滑入时可见生成。
 	if _arena != null:
@@ -567,10 +579,12 @@ func enter_recruit(session: RecruitSession, enter_seconds: float = -1.0) -> void
 
 
 func exit_recruit() -> void:
+	_close_recruit_shop()
 	_unbind_recruit_session()
 	_recruit_session = null
 	_recruit_selected_candidate = -1
 	_recruit_selected_replace_id = -1
+	_recruit_pending_item_slot = -1
 	_recruit_animating = false
 	_recruit_team_slots.clear()
 	if _arena != null:
@@ -606,7 +620,6 @@ func _play_half_field_enter_animation(seconds: float) -> void:
 
 func _begin_combat_from_prepare() -> void:
 	## COMBAT.md §6.5：友方入座时间序 → 敌方配置书写序 → 清手牌 → 锁操作 → 游戏开始。
-	_close_prepare_shop()
 	_lock_phase_active = true
 	_timestop_queue.clear()
 
@@ -919,195 +932,6 @@ func _ensure_refresh_button() -> void:
 	_refresh_button.visible = false
 
 
-func _ensure_prepare_shop_panel() -> void:
-	if _prepare_shop_panel != null and is_instance_valid(_prepare_shop_panel):
-		return
-	_prepare_shop_panel = PrepareShopPanel.new()
-	_prepare_shop_panel.name = "PrepareShopPanel"
-	_prepare_shop_panel.visible = false
-	var dock_box: Node = null
-	if _hand_row != null:
-		dock_box = _hand_row.get_parent()
-	elif _start_button != null:
-		dock_box = _start_button.get_parent()
-	if dock_box != null:
-		dock_box.add_child(_prepare_shop_panel)
-		## 插在手牌行之前，开战按钮之上。
-		if _hand_row != null:
-			dock_box.move_child(_prepare_shop_panel, _hand_row.get_index())
-	else:
-		add_child(_prepare_shop_panel)
-	if not _prepare_shop_panel.character_pressed.is_connected(_on_prepare_character_pressed):
-		_prepare_shop_panel.character_pressed.connect(_on_prepare_character_pressed)
-	if not _prepare_shop_panel.item_pressed.is_connected(_on_prepare_item_pressed):
-		_prepare_shop_panel.item_pressed.connect(_on_prepare_item_pressed)
-
-
-func _get_prepare_shop_config() -> PrepareShopConfig:
-	if _prepare_shop_config != null:
-		return _prepare_shop_config
-	_prepare_shop_config = PrepareShopConfig.load_or_default()
-	return _prepare_shop_config
-
-
-func _open_prepare_shop() -> void:
-	_ensure_prepare_shop_panel()
-	var shop_rng := RandomNumberGenerator.new()
-	if _encounter_rng != null:
-		shop_rng.seed = _encounter_rng.randi()
-	else:
-		shop_rng.randomize()
-	_prepare_shop.configure(_get_prepare_shop_config(), _economy, shop_rng)
-	_prepare_shop.open_shop(_deck_state, _tier_index)
-	if not _prepare_shop.shop_changed.is_connected(_on_prepare_shop_changed):
-		_prepare_shop.shop_changed.connect(_on_prepare_shop_changed)
-	_refresh_prepare_shop_panel()
-
-
-func _close_prepare_shop() -> void:
-	if _prepare_shop != null:
-		_prepare_shop.close_shop()
-	if _prepare_shop_panel != null:
-		_prepare_shop_panel.clear_pending_item()
-		_prepare_shop_panel.visible = false
-		_prepare_shop_panel.set_hint("")
-
-
-func _refresh_deploy_cap_from_deck() -> void:
-	if _deck_state == null:
-		_deploy_cap = DeckConfig.DEFAULT_DEPLOY_CAP
-		return
-	var config := _deck_state.get_config()
-	var deck_cap := _deck_state.get_max_size()
-	var seat_grid := _deck_state.get_slot_count()
-	if deck_cap > 0 and seat_grid > 0:
-		_deploy_cap = mini(deck_cap, seat_grid)
-	elif deck_cap > 0:
-		_deploy_cap = deck_cap
-	elif seat_grid > 0:
-		_deploy_cap = seat_grid
-	else:
-		_deploy_cap = config.get_deploy_cap() if config != null else DeckConfig.DEFAULT_DEPLOY_CAP
-
-
-func _refresh_prepare_shop_panel() -> void:
-	if _prepare_shop_panel == null:
-		return
-	var show_shop := _phase == Phase.PREPARE and _prepare_shop != null and _prepare_shop.is_open()
-	_prepare_shop_panel.visible = show_shop
-	if not show_shop:
-		return
-	var gold := _economy.gold if _economy != null else 0
-	var full := _deck_state != null and _deck_state.is_full()
-	_prepare_shop_panel.bind_offers(
-		_prepare_shop.get_character_offers(),
-		_prepare_shop.get_item_offers(),
-		gold,
-		full,
-		_prepare_shop,
-	)
-	if _prepare_shop_panel.get_pending_item_slot() >= 0:
-		_prepare_shop_panel.set_hint("点己方座位角色使用药水，或拖到角色上")
-	else:
-		_prepare_shop_panel.set_hint("点击购买；药水可拖到己方角色")
-
-
-func _on_prepare_shop_changed() -> void:
-	_refresh_prepare_shop_panel()
-	_refresh_hud()
-
-
-func _on_prepare_character_pressed(slot_index: int) -> void:
-	if _phase != Phase.PREPARE or _prepare_shop == null or not _prepare_shop.is_open():
-		return
-	var result := _prepare_shop.try_buy_character(slot_index, _deck_state)
-	if int(result.get("result", PrepareShopService.BuyResult.FAILED)) != PrepareShopService.BuyResult.OK:
-		var reason := String(result.get("reason", ""))
-		match reason:
-			"cant_afford":
-				_show_hint("金币不足")
-			"roster_full":
-				_show_hint("席位已满")
-			_:
-				_show_hint("无法购买")
-		return
-	_refresh_deploy_cap_from_deck()
-	_load_persistent_seats_into_prepare()
-	_sync_slot_visuals()
-	_show_hint("已买入角色")
-	_refresh_prepare_shop_panel()
-	_refresh_hud()
-
-
-func _on_prepare_item_pressed(slot_index: int) -> void:
-	if _phase != Phase.PREPARE or _prepare_shop == null or not _prepare_shop.is_open():
-		return
-	var item := _prepare_shop.get_item_offer(slot_index)
-	if item == null:
-		return
-	if item.item_type == PrepareItemData.ItemType.BANNER:
-		var result := _prepare_shop.try_buy_banner(slot_index, _deck_state)
-		if int(result.get("result", PrepareShopService.BuyResult.FAILED)) != PrepareShopService.BuyResult.OK:
-			var reason := String(result.get("reason", ""))
-			match reason:
-				"cant_afford":
-					_show_hint("金币不足")
-				"cap_maxed":
-					_show_hint("席位已达上限")
-				_:
-					_show_hint("无法购买旗帜")
-			return
-		_refresh_deploy_cap_from_deck()
-		_show_hint("席位上限 +1（当前 %d）" % _deck_state.get_max_size())
-		_refresh_prepare_shop_panel()
-		_refresh_hud()
-		return
-	## 药水：进入选目标；也可拖到角色。
-	if _prepare_shop_panel != null:
-		_prepare_shop_panel.set_pending_item_slot(slot_index)
-		_prepare_shop_panel.set_hint("点己方座位角色使用药水")
-	_show_hint("选择目标角色")
-
-
-func _on_prepare_item_dropped(item_slot: int, tile_pos: Vector2) -> void:
-	if _phase != Phase.PREPARE:
-		return
-	var cell := Vector2i(floori(tile_pos.x), floori(tile_pos.y))
-	var seat_i := _slots.find_slot_at_cell(cell)
-	if seat_i < 0:
-		_show_hint("请拖到己方座位角色上")
-		return
-	var entry := _slots.get_entry(seat_i)
-	if entry == null:
-		_show_hint("空座无效，请拖到角色上")
-		return
-	_try_apply_prepare_potion(item_slot, entry.entry_id)
-
-
-func _try_apply_prepare_potion(item_slot: int, entry_id: int) -> void:
-	if _prepare_shop == null or not _prepare_shop.is_open():
-		return
-	var result := _prepare_shop.try_buy_potion_on_entry(item_slot, _deck_state, entry_id)
-	if _prepare_shop_panel != null:
-		_prepare_shop_panel.clear_pending_item()
-	if int(result.get("result", PrepareShopService.BuyResult.FAILED)) != PrepareShopService.BuyResult.OK:
-		var reason := String(result.get("reason", ""))
-		match reason:
-			"cant_afford":
-				_show_hint("金币不足")
-			"no_target":
-				_show_hint("无效目标")
-			_:
-				_show_hint("无法使用道具")
-		_refresh_prepare_shop_panel()
-		return
-	_load_persistent_seats_into_prepare()
-	_sync_slot_visuals()
-	_show_hint("道具已生效")
-	_refresh_prepare_shop_panel()
-	_refresh_hud()
-
-
 func _ensure_recruit_hud() -> void:
 	if _recruit_hud != null and is_instance_valid(_recruit_hud):
 		return
@@ -1195,7 +1019,7 @@ func _prepare_equivalent_dock_height() -> float:
 
 
 func _hide_combat_chrome_for_recruit() -> void:
-	## 只藏手牌/开战/刷新/准备商店；Dock 锁到准备等效高度，避免开局/胜后招募 Arena 变高变宽。
+	## 只藏手牌/开战/刷新；Dock 锁到准备等效高度，避免开局/胜后招募 Arena 变高变宽。
 	if _dock != null:
 		_dock.visible = true
 		var keep_h := _prepare_equivalent_dock_height()
@@ -1208,8 +1032,6 @@ func _hide_combat_chrome_for_recruit() -> void:
 		_start_button.visible = false
 	if _refresh_button != null:
 		_refresh_button.visible = false
-	if _prepare_shop_panel != null:
-		_prepare_shop_panel.visible = false
 	if _result_overlay != null:
 		_result_overlay.visible = false
 
@@ -1220,7 +1042,6 @@ func _restore_combat_chrome_after_recruit() -> void:
 		_dock.custom_minimum_size.y = 0.0
 	if _hand_row != null:
 		_hand_row.visible = true
-	_refresh_prepare_shop_panel()
 
 
 func _show_recruit_hud() -> void:
@@ -1260,9 +1081,11 @@ func _sync_recruit_arena() -> void:
 	_arena.recruit_active = true
 	_arena.recruit_team_slots = _recruit_team_slots
 	_arena.recruit_candidates = _build_recruit_candidate_previews()
+	_arena.recruit_items = _build_recruit_item_previews()
 	_arena.recruit_selected_candidate = _recruit_selected_candidate
 	_arena.recruit_selected_replace_id = _recruit_selected_replace_id
 	_arena.recruit_needs_replace = _recruit_session.needs_replace()
+	_arena.recruit_pending_item_slot = _recruit_pending_item_slot
 	_arena.recruit_sell_cell = _build_recruit_sell_cell()
 	_arena.prepare_slots = null
 	_arena.enemy_slots = null
@@ -1305,7 +1128,8 @@ func _build_recruit_candidate_previews() -> Array:
 	var result: Array = []
 	if _recruit_session == null:
 		return result
-	var cells := _build_recruit_candidate_cells(RecruitSession.CANDIDATE_COUNT)
+	var count := _recruit_session.get_candidate_slot_count()
+	var cells := _build_recruit_candidate_cells(count)
 	var list := _recruit_session.get_candidates()
 	for i in list.size():
 		var unit: UnitData = list[i]
@@ -1322,12 +1146,34 @@ func _build_recruit_candidate_previews() -> Array:
 	return result
 
 
+func _build_recruit_item_previews() -> Array:
+	var result: Array = []
+	if _recruit_shop == null or not _recruit_shop.is_open():
+		return result
+	var items := _recruit_shop.get_item_offers()
+	var cells := _build_recruit_item_cells(items.size())
+	for i in items.size():
+		var item: PrepareItemData = items[i]
+		var cell := cells[i] if i < cells.size() else NO_CELL
+		var cost := _recruit_shop.get_item_cost(item) if item != null else 0
+		result.append({
+			"index": i,
+			"item": item,
+			"cell": cell,
+			"cost": cost,
+			"affordable": _recruit_shop.can_afford_item(i) if item != null else false,
+			"label": item.get_display_name() if item != null else "",
+		})
+	return result
+
+
 func _build_recruit_candidate_cells(count: int) -> Array[Vector2i]:
 	var n := maxi(1, count)
-	## 单行候选人：相对我半场垂直居中（与 PrepareSlotBoard._centered_row_ys 同一公式）。
-	var row_ys := PrepareSlotBoard._centered_row_ys(_board_size.y, 1, 1, 1, false)
-	var y := row_ys[0] if not row_ys.is_empty() else BoardHalf.midline_row(_board_size.y)
-	var gap := 2
+	## 两行布局：候选人上行；相对我半场略偏上（为道具行留空）。
+	var mid := BoardHalf.midline_row(_board_size.y)
+	var y := clampi(mid + 1, mid, maxi(mid, _board_size.y - 3))
+	## 5 槽时 gap=1 才能塞进 9 列。
+	var gap := 1 if n >= 5 else 2
 	var block_w := n + (n - 1) * gap
 	var start_x := (_board_size.x - block_w) / 2
 	start_x = clampi(start_x, 0, maxi(0, _board_size.x - 1))
@@ -1338,19 +1184,58 @@ func _build_recruit_candidate_cells(count: int) -> Array[Vector2i]:
 	return cells
 
 
-## 出售落点：候选人行下方居中，不与候选人槽重叠。
-func _build_recruit_sell_cell() -> Vector2i:
+func _build_recruit_item_cells(count: int) -> Array[Vector2i]:
+	var n := maxi(0, count)
+	if n <= 0:
+		return []
+	var cand_count := RecruitSession.CANDIDATE_COUNT
+	if _recruit_session != null:
+		cand_count = _recruit_session.get_candidate_slot_count()
+	var cand := _build_recruit_candidate_cells(cand_count)
 	var mid := BoardHalf.midline_row(_board_size.y)
-	var cand := _build_recruit_candidate_cells(RecruitSession.CANDIDATE_COUNT)
-	var y := mid + 2
+	var y := mid + 3
 	if not cand.is_empty():
 		y = cand[0].y + 2
+	y = clampi(y, mid, maxi(mid, _board_size.y - 2))
+	var gap := 1
+	var block_w := n + (n - 1) * gap
+	var start_x := (_board_size.x - block_w) / 2
+	start_x = clampi(start_x, 0, maxi(0, _board_size.x - 1))
+	var cells: Array[Vector2i] = []
+	for i in n:
+		var x := clampi(start_x + i * (1 + gap), 0, maxi(0, _board_size.x - 1))
+		cells.append(Vector2i(x, y))
+	return cells
+
+
+## 出售落点：道具行右侧或下方，不与候选人/道具槽重叠。
+func _build_recruit_sell_cell() -> Vector2i:
+	var mid := BoardHalf.midline_row(_board_size.y)
+	var cand_count := RecruitSession.CANDIDATE_COUNT
+	if _recruit_session != null:
+		cand_count = _recruit_session.get_candidate_slot_count()
+	var cand := _build_recruit_candidate_cells(cand_count)
+	var item_n := 0
+	if _recruit_shop != null and _recruit_shop.is_open():
+		item_n = _recruit_shop.get_item_offers().size()
+	var items := _build_recruit_item_cells(item_n)
+	var y := mid + 4
+	if not items.is_empty():
+		y = items[0].y
+	elif not cand.is_empty():
+		y = cand[0].y + 2
 	y = clampi(y, mid, maxi(mid, _board_size.y - 1))
-	var x := int(_board_size.x / 2)
+	var x := _board_size.x - 1
+	if not items.is_empty():
+		x = clampi(items[items.size() - 1].x + 2, 0, maxi(0, _board_size.x - 1))
 	var cell := Vector2i(x, y)
 	for c in cand:
 		if c == cell:
-			cell.x = clampi(x + 1, 0, maxi(0, _board_size.x - 1))
+			cell.y = clampi(y + 1, mid, maxi(mid, _board_size.y - 1))
+			break
+	for c2 in items:
+		if c2 == cell:
+			cell.y = clampi(cell.y + 1, mid, maxi(mid, _board_size.y - 1))
 			break
 	return cell
 
@@ -1366,12 +1251,14 @@ func _refresh_recruit_hud() -> void:
 	if _recruit_seat != null:
 		_recruit_seat.text = "席位 %d/%d" % [seats, cap]
 	if _recruit_hint != null:
-		if _recruit_session.require_nonempty_roster and seats < 1:
+		if _recruit_pending_item_slot >= 0:
+			_recruit_hint.text = "点上区队伍角色使用药水，或拖到角色上"
+		elif _recruit_session.require_nonempty_roster and seats < 1:
 			_recruit_hint.text = "开局招募：至少招募 1 名单位后才能继续"
 		elif _recruit_session.needs_replace():
 			_recruit_hint.text = "队伍已满：将候选人拖到要替换的成员上（旧人不退金）；可换座或拖成员到出售槽腾位"
 		else:
-			_recruit_hint.text = "将候选人拖到上区空座招入；上区可换座；成员拖到出售槽退金"
+			_recruit_hint.text = "上行招人；下行道具（药水拖到上区角色；旗帜扩席位）"
 	if _recruit_refresh_btn != null:
 		_recruit_refresh_btn.disabled = _recruit_animating or not _recruit_session.can_refresh()
 		_recruit_refresh_btn.text = "刷新（%d 金）" % _recruit_session.get_refresh_cost()
@@ -1442,10 +1329,110 @@ func _on_recruit_candidate_pressed(candidate_index: int) -> void:
 func _on_recruit_team_pressed(entry_id: int) -> void:
 	if _phase != Phase.RECRUIT or _recruit_animating or _recruit_session == null:
 		return
+	## 待用药水：点上区成员结算。
+	if _recruit_pending_item_slot >= 0:
+		_try_apply_recruit_potion(_recruit_pending_item_slot, entry_id)
+		return
 	_recruit_selected_replace_id = entry_id
 	_sync_recruit_arena()
 	if _recruit_selected_candidate >= 0 and _recruit_session.needs_replace():
 		_try_recruit(_recruit_selected_candidate, entry_id)
+
+
+func _on_recruit_item_pressed(item_slot: int) -> void:
+	if _phase != Phase.RECRUIT or _recruit_animating or _recruit_shop == null or not _recruit_shop.is_open():
+		return
+	var item := _recruit_shop.get_item_offer(item_slot)
+	if item == null:
+		return
+	if item.item_type == PrepareItemData.ItemType.BANNER:
+		var result := _recruit_shop.try_buy_banner(item_slot, _deck_state)
+		if int(result.get("result", RecruitShopService.BuyResult.FAILED)) != RecruitShopService.BuyResult.OK:
+			var reason := String(result.get("reason", ""))
+			match reason:
+				"cant_afford":
+					_show_recruit_item_hint("金币不足")
+				"cap_maxed":
+					_show_recruit_item_hint("席位已达上限")
+				_:
+					_show_recruit_item_hint("无法购买旗帜")
+			return
+		_recruit_pending_item_slot = -1
+		_show_recruit_item_hint("席位上限 +1（当前 %d）" % _deck_state.get_max_size())
+		_sync_recruit_arena()
+		_refresh_recruit_hud()
+		return
+	## 药水：进入选目标；也可拖到上区角色。
+	_recruit_pending_item_slot = item_slot
+	_show_recruit_item_hint("点上区队伍角色使用药水，或拖到角色上")
+	_sync_recruit_arena()
+
+
+func _on_recruit_item_drop(item_slot: int, entry_id: int) -> void:
+	if _phase != Phase.RECRUIT or _recruit_animating:
+		return
+	_try_apply_recruit_potion(item_slot, entry_id)
+
+
+func _try_apply_recruit_potion(item_slot: int, entry_id: int) -> void:
+	if _recruit_shop == null or not _recruit_shop.is_open() or _deck_state == null:
+		return
+	var result := _recruit_shop.try_buy_potion_on_entry(item_slot, _deck_state, entry_id)
+	_recruit_pending_item_slot = -1
+	if int(result.get("result", RecruitShopService.BuyResult.FAILED)) != RecruitShopService.BuyResult.OK:
+		var reason := String(result.get("reason", ""))
+		match reason:
+			"cant_afford":
+				_show_recruit_item_hint("金币不足")
+			"no_target":
+				_show_recruit_item_hint("无效目标")
+			_:
+				_show_recruit_item_hint("无法使用道具")
+		_sync_recruit_arena()
+		return
+	_show_recruit_item_hint("道具已生效")
+	_sync_recruit_arena()
+	_refresh_recruit_hud()
+
+
+func _show_recruit_item_hint(text: String) -> void:
+	if _recruit_hint != null:
+		_recruit_hint.text = text
+	else:
+		_show_hint(text)
+
+
+func _get_recruit_shop_config() -> RecruitShopConfig:
+	if _recruit_shop_config != null:
+		return _recruit_shop_config
+	_recruit_shop_config = RecruitShopConfig.load_or_default()
+	return _recruit_shop_config
+
+
+func _open_recruit_shop() -> void:
+	var deck := _deck_state
+	if _recruit_session != null and _recruit_session.deck != null:
+		deck = _recruit_session.deck
+	_recruit_shop.configure(_get_recruit_shop_config(), _economy)
+	_recruit_shop.open_shop(deck)
+	if not _recruit_shop.shop_changed.is_connected(_on_recruit_shop_changed):
+		_recruit_shop.shop_changed.connect(_on_recruit_shop_changed)
+	_recruit_pending_item_slot = -1
+
+
+func _close_recruit_shop() -> void:
+	if _recruit_shop != null:
+		if _recruit_shop.shop_changed.is_connected(_on_recruit_shop_changed):
+			_recruit_shop.shop_changed.disconnect(_on_recruit_shop_changed)
+		_recruit_shop.close_shop()
+	_recruit_pending_item_slot = -1
+
+
+func _on_recruit_shop_changed() -> void:
+	if _phase != Phase.RECRUIT:
+		return
+	_sync_recruit_arena()
+	_refresh_recruit_hud()
 
 
 func _try_recruit(candidate_index: int, replace_entry_id: int, seat_index: int = -1) -> void:
@@ -1480,6 +1467,9 @@ func _on_recruit_reset_pressed() -> void:
 	_recruit_session.reset()
 	_recruit_selected_candidate = -1
 	_recruit_selected_replace_id = -1
+	_recruit_pending_item_slot = -1
+	if _recruit_shop != null and _recruit_shop.is_open():
+		_recruit_shop.restore_snapshot()
 
 
 func _on_recruit_skip_pressed() -> void:
@@ -1509,15 +1499,6 @@ func _on_board_pressed(tile_pos: Vector2) -> void:
 	if _phase == Phase.PREPARE:
 		var cell := Vector2i(floori(tile_pos.x), floori(tile_pos.y))
 		var slot_index := _slots.find_slot_at_cell(cell)
-		## 药水待选目标：点己方已占座结算。
-		if _prepare_shop_panel != null and _prepare_shop_panel.get_pending_item_slot() >= 0:
-			if slot_index >= 0:
-				var target := _slots.get_entry(slot_index)
-				if target != null:
-					_try_apply_prepare_potion(_prepare_shop_panel.get_pending_item_slot(), target.entry_id)
-					return
-			_show_hint("请点己方座位上的角色")
-			return
 		if slot_index < 0:
 			if _selected_entry_id >= 0 and _card_flow.is_in_hand(_selected_entry_id):
 				try_assign_to_slot(_selected_entry_id, cell)
@@ -1795,7 +1776,6 @@ func _refresh_cards() -> void:
 		_refresh_button.visible = false
 		_refresh_button.disabled = true
 		_refresh_button.text = "刷新手牌（已禁用）"
-	_refresh_prepare_shop_panel()
 
 
 func _combat_phase_status_text() -> String:
