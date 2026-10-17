@@ -1,13 +1,14 @@
 class_name VirtualJoystick
 extends Control
-## Bottom-screen transparent virtual stick for mobile / touch.
+## Bottom-center transparent virtual stick for mobile / touch.
 
 
 signal vector_changed(vector: Vector2)
 
-const BASE_RADIUS := 72.0
-const KNOB_RADIUS := 28.0
+const BASE_RADIUS := 96.0
+const KNOB_RADIUS := 38.0
 const DEADZONE := 0.12
+const BOTTOM_MARGIN := 36.0
 
 var output: Vector2 = Vector2.ZERO
 
@@ -21,16 +22,16 @@ var _center: Vector2 = Vector2.ZERO
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_build_visuals()
-	set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	anchor_left = 0.0
-	anchor_right = 0.0
+	anchor_left = 0.5
+	anchor_right = 0.5
 	anchor_top = 1.0
 	anchor_bottom = 1.0
-	offset_left = 24.0
-	offset_right = 24.0 + BASE_RADIUS * 2.0 + 16.0
-	offset_top = -24.0 - BASE_RADIUS * 2.0 - 16.0
-	offset_bottom = -24.0
-	custom_minimum_size = Vector2(BASE_RADIUS * 2.0 + 16.0, BASE_RADIUS * 2.0 + 16.0)
+	var box := BASE_RADIUS * 2.0 + 24.0
+	custom_minimum_size = Vector2(box, box)
+	offset_left = -box * 0.5
+	offset_right = box * 0.5
+	offset_top = -BOTTOM_MARGIN - box
+	offset_bottom = -BOTTOM_MARGIN
 	resized.connect(_on_resized)
 	call_deferred("_on_resized")
 
@@ -43,8 +44,8 @@ func _build_visuals() -> void:
 	_base = Panel.new()
 	_base.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var base_style := StyleBoxFlat.new()
-	base_style.bg_color = Color(1, 1, 1, 0.14)
-	base_style.border_color = Color(1, 1, 1, 0.28)
+	base_style.bg_color = Color(1, 1, 1, 0.16)
+	base_style.border_color = Color(1, 1, 1, 0.32)
 	base_style.set_border_width_all(2)
 	base_style.corner_radius_top_left = int(BASE_RADIUS)
 	base_style.corner_radius_top_right = int(BASE_RADIUS)
@@ -56,8 +57,8 @@ func _build_visuals() -> void:
 	_knob = Panel.new()
 	_knob.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var knob_style := StyleBoxFlat.new()
-	knob_style.bg_color = Color(1, 1, 1, 0.32)
-	knob_style.border_color = Color(1, 1, 1, 0.45)
+	knob_style.bg_color = Color(1, 1, 1, 0.36)
+	knob_style.border_color = Color(1, 1, 1, 0.5)
 	knob_style.set_border_width_all(2)
 	knob_style.corner_radius_top_left = int(KNOB_RADIUS)
 	knob_style.corner_radius_top_right = int(KNOB_RADIUS)

@@ -39,6 +39,7 @@ func take_damage(amount: int) -> void:
 	if is_dead or amount <= 0:
 		return
 	current_hp = maxi(0, current_hp - amount)
+	DamagePopup.spawn(get_parent() if get_parent() else self, global_position, amount, Color(1.0, 0.85, 0.35, 1.0))
 	_update_hp_bar()
 	if current_hp <= 0:
 		_open()
@@ -69,6 +70,9 @@ func _ensure_visuals() -> void:
 		_label.text = "宝箱"
 		_label.position = Vector2(-18, -48)
 		_label.add_theme_font_size_override("font_size", 12)
+		var font: Font = UiFonts.get_font()
+		if font != null:
+			_label.add_theme_font_override("font", font)
 		add_child(_label)
 	if _hp_bg == null:
 		_hp_bg = ColorRect.new()
