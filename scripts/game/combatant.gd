@@ -32,10 +32,16 @@ var _pose: AnimPose = AnimPose.IDLE
 var _loop_tween: Tween
 var _oneshot_tween: Tween
 var _impact_tween: Tween
+var _impact_flying: bool = false
+var _impact_start: Vector2 = Vector2.ZERO
+var _impact_end: Vector2 = Vector2.ZERO
+var _impact_spin_sign: float = 1.0
 var _out_of_combat_sec: float = 0.0
 var _regen_accum: float = 0.0
 
-const CHARGE_IMPACT_TWEEN_SEC := 0.15
+const CHARGE_IMPACT_TWEEN_SEC := 0.4
+const CHARGE_IMPACT_ARC_HEIGHT := 28.0
+const CHARGE_IMPACT_SPIN_RAD := 0.35
 
 
 func setup(def: UnitDefinition, p_team: Team) -> void:
@@ -114,7 +120,7 @@ func apply_stun(duration: float) -> void:
 	velocity = Vector2.ZERO
 
 
-## Knockback via short Tween; damage+stun settle once at impact start (no double-hit).
+## Knockback via parabolic Tween; damage+stun settle once at impact start (no double-hit).
 func apply_charge_impact(
 	push_dir: Vector2,
 	knockback_distance: float,
@@ -126,9 +132,7 @@ func apply_charge_impact(
 	var dir := push_dir.normalized()
 	if dir == Vector2.ZERO:
 		dir = Vector2.RIGHT
-	if _impact_tween != null and is_instance_valid(_impact_tween):
-		_impact_tween.kill()
-		_impact_tween = null
+	_kill_impact_tween()
 	# Settle damage + stun once at impact start; flash comes from take_damage.
 	if damage > 0:
 		take_damage(damage)
@@ -138,15 +142,52 @@ func apply_charge_impact(
 		apply_stun(stun_duration)
 	if knockback_distance <= 0.0:
 		return
-	var end_pos := global_position + dir * knockback_distance
+	_kill_loop_tween()
+	_impact_start = global_position
+	_impact_end = _impact_start + dir * knockback_distance
+	_impact_spin_sign = 1.0 if dir.x >= 0.0 else -1.0
+	_impact_flying = true
+	velocity = Vector2.ZERO
 	_impact_tween = create_tween()
-	_impact_tween.tween_property(self, "global_position", end_pos, CHARGE_IMPACT_TWEEN_SEC).set_trans(
-		Tween.TRANS_QUAD
-	).set_ease(Tween.EASE_OUT)
+	_impact_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_impact_tween.tween_method(_tick_impact_flight, 0.0, 1.0, CHARGE_IMPACT_TWEEN_SEC)
+	_impact_tween.tween_callback(_finish_impact_flight)
 	if _sprite != null:
 		var punch := create_tween()
 		punch.tween_property(_sprite, "scale", _base_sprite_scale * 1.16, 0.06)
-		punch.tween_property(_sprite, "scale", _base_sprite_scale, 0.1)
+		punch.tween_property(_sprite, "scale", _base_sprite_scale, 0.12)
+
+
+func _tick_impact_flight(t: float) -> void:
+	if is_dead:
+		return
+	global_position = _impact_start.lerp(_impact_end, t)
+	if _sprite == null:
+		return
+	_sprite.position.y = -CHARGE_IMPACT_ARC_HEIGHT * 4.0 * t * (1.0 - t)
+	_sprite.rotation = CHARGE_IMPACT_SPIN_RAD * _impact_spin_sign * sin(PI * t)
+
+
+func _kill_impact_tween() -> void:
+	if _impact_tween != null and is_instance_valid(_impact_tween):
+		_impact_tween.kill()
+	_impact_tween = null
+	_impact_flying = false
+	_reset_impact_sprite()
+
+
+func _reset_impact_sprite() -> void:
+	if _sprite == null:
+		return
+	_sprite.position = Vector2.ZERO
+	_sprite.rotation = 0.0
+	_sprite.scale = _base_sprite_scale
+
+
+func _finish_impact_flight() -> void:
+	_impact_tween = null
+	_impact_flying = false
+	_reset_impact_sprite()
 
 
 func _physics_process(delta: float) -> void:
@@ -156,7 +197,9 @@ func _physics_process(delta: float) -> void:
 		_stun_remaining = maxf(0.0, _stun_remaining - delta)
 		_attack_cd = maxf(0.0, _attack_cd - delta)
 		velocity = Vector2.ZERO
-		move_and_slide()
+		# During knockback flight, do not let move_and_slide override Tween displacement.
+		if not _impact_flying:
+			move_and_slide()
 		_update_move_pose()
 		_tick_regen(delta)
 		return
@@ -255,6 +298,7 @@ func _die() -> void:
 	if is_dead:
 		return
 	is_dead = true
+	_kill_impact_tween()
 	died.emit(self)
 	collision_layer = 0
 	collision_mask = 0
@@ -334,7 +378,7 @@ func _refresh_groups() -> void:
 
 
 func _update_move_pose() -> void:
-	if is_dead or _pose == AnimPose.ATTACK or _pose == AnimPose.DEATH:
+	if is_dead or _impact_flying or _pose == AnimPose.ATTACK or _pose == AnimPose.DEATH:
 		return
 	if velocity.length() > 18.0:
 		_set_pose(AnimPose.MOVE)

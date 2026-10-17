@@ -10,6 +10,16 @@ enum Phase { PRESSURE, TELEGRAPH, CHARGING, SUMMONING, STUNNED }
 const DEFAULT_BEHAVIOR_PATH := "res://resources/combat/boss_summon_charge.tres"
 const DEFAULT_MINION_PATH := "res://resources/units/boss_minion.tres"
 const TELEGRAPH_LENGTH_FALLBACK := 420.0
+## Presentation-only (not charge path motion). Charge travel stays velocity + move_and_slide.
+const TELEGRAPH_WIDTH_MUL := 1.22
+const TELEGRAPH_ALPHA_BASE := 0.38
+const TELEGRAPH_ALPHA_PULSE := 0.78
+const TELEGRAPH_PULSE_HZ := 3.2
+const WINDUP_LEAN_PX := 12.0
+const WINDUP_SCALE_MUL := 0.9
+const CHARGE_LAUNCH_SEC := 0.08
+const CHARGE_STRETCH_ALONG := 1.3
+const CHARGE_STRETCH_ACROSS := 0.82
 
 var behavior: BossBehaviorConfig
 var minion_definition: UnitDefinition
@@ -22,6 +32,7 @@ var _charge_origin: Vector2 = Vector2.ZERO
 var _charge_traveled: float = 0.0
 var _charge_hit_ids: Dictionary = {}
 var _telegraph: Polygon2D
+var _charge_fx_tween: Tween
 
 
 func configure(def: UnitDefinition, rng: RandomNumberGenerator) -> void:
@@ -64,6 +75,8 @@ func _die() -> void:
 	if is_dead:
 		return
 	_clear_telegraph()
+	_kill_charge_fx()
+	_reset_charge_pose()
 	boss_defeated.emit(self)
 	# Skip gold drop; play shared death tween via Combatant.
 	is_dead = true
@@ -73,6 +86,13 @@ func _die() -> void:
 	combat_enabled = false
 	velocity = Vector2.ZERO
 	_play_death_anim()
+
+
+func _update_move_pose() -> void:
+	# Keep wind-up / charge silhouette from being overwritten by idle/move loops.
+	if _phase == Phase.TELEGRAPH or _phase == Phase.CHARGING:
+		return
+	super._update_move_pose()
 
 
 func _apply_body_from_behavior() -> void:
@@ -95,6 +115,8 @@ func _reset_cycle() -> void:
 	_charge_traveled = 0.0
 	_charge_hit_ids.clear()
 	_clear_telegraph()
+	_kill_charge_fx()
+	_reset_charge_pose()
 	velocity = Vector2.ZERO
 
 
@@ -129,6 +151,8 @@ func _begin_telegraph() -> void:
 	_charge_traveled = 0.0
 	_charge_hit_ids.clear()
 	velocity = Vector2.ZERO
+	_kill_loop_tween()
+	_play_windup_pose()
 	_show_telegraph()
 
 
@@ -137,6 +161,7 @@ func _tick_telegraph(delta: float) -> void:
 	velocity = Vector2.ZERO
 	move_and_slide()
 	_update_telegraph_visual()
+	_pulse_telegraph()
 	if _phase_timer <= 0.0:
 		_begin_charge()
 
@@ -146,15 +171,18 @@ func _begin_charge() -> void:
 	_charge_origin = global_position
 	_charge_traveled = 0.0
 	_charge_hit_ids.clear()
-	# Keep telegraph briefly readable at wind-up pose; clear so it does not ride the boss.
+	# Clear warning so it does not ride the boss; travel is velocity hard-rush only.
 	_clear_telegraph()
+	_play_charge_launch()
 
 
 func _tick_charging(delta: float) -> void:
+	# Hard rush: full charge_speed every frame — never tween global_position for path travel.
 	var step := behavior.charge_speed * delta
 	velocity = _charge_dir * behavior.charge_speed
 	move_and_slide()
 	_charge_traveled += step
+	_apply_charge_stretch_pose()
 	_resolve_charge_hits()
 	if _charge_traveled >= behavior.charge_distance:
 		_next_is_charge = false
@@ -181,6 +209,8 @@ func _enter_stun(duration: float) -> void:
 	_phase = Phase.STUNNED
 	_phase_timer = maxf(0.05, duration)
 	velocity = Vector2.ZERO
+	_kill_charge_fx()
+	_reset_charge_pose()
 
 
 func _tick_stunned(delta: float) -> void:
@@ -281,7 +311,7 @@ func _show_telegraph() -> void:
 	_telegraph = Polygon2D.new()
 	_telegraph.name = "ChargeTelegraph"
 	_telegraph.z_index = -1
-	_telegraph.color = Color(0.95, 0.25, 0.15, 0.35)
+	_telegraph.color = Color(1.0, 0.2, 0.12, TELEGRAPH_ALPHA_BASE)
 	add_child(_telegraph)
 	_update_telegraph_visual()
 
@@ -290,7 +320,7 @@ func _update_telegraph_visual() -> void:
 	if _telegraph == null or not is_instance_valid(_telegraph):
 		return
 	var length := behavior.charge_distance if behavior else TELEGRAPH_LENGTH_FALLBACK
-	var half_w := behavior.charge_path_half_width if behavior else 48.0
+	var half_w := (behavior.charge_path_half_width if behavior else 48.0) * TELEGRAPH_WIDTH_MUL
 	var dir := _charge_dir
 	if dir == Vector2.ZERO:
 		dir = Vector2.RIGHT
@@ -305,10 +335,78 @@ func _update_telegraph_visual() -> void:
 	])
 
 
+func _pulse_telegraph() -> void:
+	if _telegraph == null or not is_instance_valid(_telegraph):
+		return
+	var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.001 * TAU * TELEGRAPH_PULSE_HZ)
+	var alpha := lerpf(TELEGRAPH_ALPHA_BASE, TELEGRAPH_ALPHA_PULSE, pulse)
+	_telegraph.color = Color(1.0, 0.18 + 0.12 * pulse, 0.1, alpha)
+
+
 func _clear_telegraph() -> void:
 	if _telegraph != null and is_instance_valid(_telegraph):
 		_telegraph.queue_free()
 	_telegraph = null
+
+
+func _play_windup_pose() -> void:
+	if _sprite == null:
+		return
+	_kill_charge_fx()
+	var lean := -_charge_dir.normalized() * WINDUP_LEAN_PX
+	_sprite.position = lean
+	_sprite.rotation = (-_charge_dir).angle() * 0.08
+	_sprite.scale = _base_sprite_scale * WINDUP_SCALE_MUL
+	_charge_fx_tween = create_tween()
+	_charge_fx_tween.tween_property(_sprite, "scale", _base_sprite_scale * (WINDUP_SCALE_MUL * 0.96), 0.12)
+	_charge_fx_tween.tween_property(_sprite, "scale", _base_sprite_scale * WINDUP_SCALE_MUL, 0.18)
+
+
+func _play_charge_launch() -> void:
+	if _sprite == null:
+		return
+	_kill_charge_fx()
+	var stretch := _charge_stretch_scale()
+	var punch := stretch * Vector2(1.08, 1.08)
+	_sprite.position = Vector2.ZERO
+	_sprite.rotation = _charge_dir.angle() * 0.06
+	_sprite.scale = _base_sprite_scale * Vector2(0.88, 1.12)
+	_charge_fx_tween = create_tween()
+	_charge_fx_tween.tween_property(_sprite, "scale", punch, CHARGE_LAUNCH_SEC).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_charge_fx_tween.tween_callback(_apply_charge_stretch_pose)
+
+
+func _charge_stretch_scale() -> Vector2:
+	var dir := _charge_dir.normalized()
+	if dir == Vector2.ZERO:
+		dir = Vector2.RIGHT
+	var ax := absf(dir.x)
+	var ay := absf(dir.y)
+	var sx := lerpf(CHARGE_STRETCH_ACROSS, CHARGE_STRETCH_ALONG, ax)
+	var sy := lerpf(CHARGE_STRETCH_ACROSS, CHARGE_STRETCH_ALONG, ay)
+	return _base_sprite_scale * Vector2(sx, sy)
+
+
+func _apply_charge_stretch_pose() -> void:
+	if _sprite == null or _phase != Phase.CHARGING:
+		return
+	_sprite.position = Vector2.ZERO
+	_sprite.rotation = _charge_dir.angle() * 0.06
+	_sprite.scale = _charge_stretch_scale()
+
+
+func _reset_charge_pose() -> void:
+	if _sprite == null:
+		return
+	_sprite.position = Vector2.ZERO
+	_sprite.rotation = 0.0
+	_sprite.scale = _base_sprite_scale
+
+
+func _kill_charge_fx() -> void:
+	if _charge_fx_tween != null and is_instance_valid(_charge_fx_tween):
+		_charge_fx_tween.kill()
+	_charge_fx_tween = null
 
 
 func _load_behavior(path: String) -> BossBehaviorConfig:
