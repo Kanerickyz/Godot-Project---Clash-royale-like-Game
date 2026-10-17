@@ -1,14 +1,14 @@
 class_name GameController
 extends Node2D
-## Squad roam prototype: spawn map entities, economy, recruit, win/lose.
+## Squad roam prototype: procedural map, economy, recruit, win/lose, timed respawns.
 
 
 const START_GOLD := 15
-const MAP_SIZE := Vector2(1600, 1200)
 const SHOP_IDLE_OPEN_SEC := 3.0
 const MOVE_IDLE_SPEED := 12.0
 const CHEST_ENGAGE_RADIUS := 110.0
 
+const PATH_SPAWN_CFG := "res://resources/world/world_spawn.tres"
 const PATH_CAPTAIN := "res://resources/units/captain.tres"
 const PATH_ALLY_SPEAR := "res://resources/units/ally_spear.tres"
 const PATH_ALLY_ARCHER := "res://resources/units/ally_archer.tres"
@@ -26,6 +26,8 @@ var game_over: bool = false
 var ui_blocking: bool = false
 
 var _rng := RandomNumberGenerator.new()
+var _spawn_cfg: WorldSpawnConfig
+var _map: RoguelikeMapGenerator
 var _entities: Node2D
 var _captain: SquadMember
 var _camera_ctrl: CaptainController
@@ -35,11 +37,17 @@ var _followers: Array[SquadMember] = []
 var _pending_chest_choices: Array = []
 var _shop_idle_sec: float = 0.0
 var _focused_chest: RoamChest
+var _respawn_timer: float = 0.0
+var _next_respawn_interval: float = 30.0
+var _enemy_serial: int = 0
+var _chest_serial: int = 0
+var _occupied_spots: Array[Vector2] = []
 
 
 func _ready() -> void:
 	add_to_group(&"game_controller")
 	_rng.randomize()
+	_spawn_cfg = _load_spawn_config()
 	_build_world()
 	_hud = GameHud.new()
 	_hud.name = "HUD"
@@ -51,9 +59,10 @@ func _ready() -> void:
 	_hud.restart_pressed.connect(_on_restart)
 	_spawn_captain()
 	_spawn_shop()
-	_spawn_enemies()
-	_spawn_chests()
+	_spawn_enemies_initial()
+	_spawn_chests_initial()
 	_spawn_boss()
+	_roll_next_respawn_interval()
 
 
 func get_move_vector() -> Vector2:
@@ -87,6 +96,7 @@ func _process(delta: float) -> void:
 		var near := _shop.is_captain_near(_captain)
 		_shop.set_captain_in_range(near)
 		_update_shop_idle_open(delta, near)
+	_update_respawn(delta)
 
 
 func _update_shop_idle_open(delta: float, near: bool) -> void:
@@ -127,46 +137,55 @@ func _update_chest_focus() -> void:
 			_focused_chest = chest
 
 
+func _update_respawn(delta: float) -> void:
+	if game_over or ui_blocking or _spawn_cfg == null or _map == null:
+		return
+	_respawn_timer += delta
+	if _respawn_timer < _next_respawn_interval:
+		return
+	_respawn_timer = 0.0
+	_roll_next_respawn_interval()
+	_spawn_enemy_batch(
+		_rng.randi_range(_spawn_cfg.respawn_enemy_min, _spawn_cfg.respawn_enemy_max),
+		true
+	)
+	if _rng.randf() <= _spawn_cfg.respawn_chest_chance:
+		_spawn_chest_batch(_spawn_cfg.respawn_chest_count, true)
+
+
+func _roll_next_respawn_interval() -> void:
+	if _spawn_cfg == null:
+		_next_respawn_interval = 30.0
+		return
+	_next_respawn_interval = _rng.randf_range(
+		_spawn_cfg.respawn_interval_min,
+		_spawn_cfg.respawn_interval_max
+	)
+
+
 func _build_world() -> void:
+	_map = RoguelikeMapGenerator.new()
+	_map.generate(_spawn_cfg, _rng)
+
 	var ground_host := Node2D.new()
 	ground_host.name = "GroundHost"
 	ground_host.z_index = -10
 	add_child(ground_host)
-	var poly := Polygon2D.new()
-	poly.name = "GroundPoly"
-	poly.polygon = PackedVector2Array([
-		Vector2(0, 0),
-		Vector2(MAP_SIZE.x, 0),
-		Vector2(MAP_SIZE.x, MAP_SIZE.y),
-		Vector2(0, MAP_SIZE.y),
-	])
-	poly.color = Color(0.22, 0.32, 0.22, 1.0)
-	ground_host.add_child(poly)
-
-	# Soft grid marks for readability.
-	for i in range(1, 8):
-		var line_h := Line2D.new()
-		line_h.width = 1.0
-		line_h.default_color = Color(0.18, 0.26, 0.18, 0.6)
-		var y := float(i) * MAP_SIZE.y / 8.0
-		line_h.points = PackedVector2Array([Vector2(0, y), Vector2(MAP_SIZE.x, y)])
-		ground_host.add_child(line_h)
-		var line_v := Line2D.new()
-		line_v.width = 1.0
-		line_v.default_color = Color(0.18, 0.26, 0.18, 0.6)
-		var x := float(i) * MAP_SIZE.x / 8.0
-		line_v.points = PackedVector2Array([Vector2(x, 0), Vector2(x, MAP_SIZE.y)])
-		ground_host.add_child(line_v)
+	_map.build_visuals(ground_host)
 
 	_entities = Node2D.new()
 	_entities.name = "Entities"
 	add_child(_entities)
 
+	var zoom := _spawn_cfg.camera_zoom if _spawn_cfg != null else 1.5
 	var cam := Camera2D.new()
 	cam.name = "Camera2D"
-	# Closer view for phone portrait (iPhone 14 Pro aspect).
-	cam.zoom = Vector2(1.85, 1.85)
+	cam.zoom = Vector2(zoom, zoom)
 	cam.position_smoothing_enabled = false
+	cam.limit_left = 0
+	cam.limit_top = 0
+	cam.limit_right = int(_map.map_size.x)
+	cam.limit_bottom = int(_map.map_size.y)
 	add_child(cam)
 	_camera_ctrl = CaptainController.new()
 	_camera_ctrl.name = "CaptainController"
@@ -179,7 +198,9 @@ func _spawn_captain() -> void:
 	_captain = SquadMember.new()
 	_captain.name = "Captain"
 	_captain.configure_as_captain(def)
-	_captain.global_position = Vector2(420, 560)
+	var spawn_pos := _map.safe_room.center() if _map.safe_room != null else Vector2(420, 560)
+	_captain.global_position = spawn_pos
+	_occupied_spots.append(spawn_pos)
 	_captain.died.connect(_on_captain_died)
 	_entities.add_child(_captain)
 	_camera_ctrl.bind_captain(_captain)
@@ -189,7 +210,14 @@ func _spawn_captain() -> void:
 func _spawn_shop() -> void:
 	_shop = RoamShop.new()
 	_shop.name = "Shop"
-	_shop.global_position = Vector2(220, 220)
+	var shop_pos := Vector2(220, 220)
+	if _map != null and _map.safe_room != null:
+		shop_pos = _map.sample_in_room(_map.safe_room, _rng, _spawn_cfg.spawn_edge_margin)
+		# Nudge away from captain if too close.
+		if _captain != null and shop_pos.distance_to(_captain.global_position) < 70.0:
+			shop_pos = _map.safe_room.center() + Vector2(-90, -70)
+	_shop.global_position = shop_pos
+	_occupied_spots.append(shop_pos)
 	var offers: Array[Dictionary] = [
 		{"unit": _load_unit(PATH_ALLY_SPEAR), "price": 15},
 		{"unit": _load_unit(PATH_ALLY_ARCHER), "price": 25},
@@ -199,45 +227,117 @@ func _spawn_shop() -> void:
 	_entities.add_child(_shop)
 
 
-func _spawn_enemies() -> void:
+func _spawn_enemies_initial() -> void:
+	var count := _rng.randi_range(_spawn_cfg.start_enemy_min, _spawn_cfg.start_enemy_max)
+	_spawn_enemy_batch(count, false)
+
+
+func _spawn_chests_initial() -> void:
+	var count := _rng.randi_range(_spawn_cfg.start_chest_min, _spawn_cfg.start_chest_max)
+	_spawn_chest_batch(count, false)
+
+
+func _spawn_enemy_batch(want: int, respect_cap: bool) -> void:
+	if want <= 0 or _entities == null or _map == null:
+		return
+	var alive := _count_alive_enemies()
+	var to_spawn := want
+	if respect_cap:
+		to_spawn = mini(want, maxi(0, _spawn_cfg.max_alive_enemies - alive))
+	if to_spawn <= 0:
+		return
+	var avoid := _collect_live_avoid_positions()
 	var def := _load_unit(PATH_ENEMY)
-	var spots: Array[Vector2] = [
-		Vector2(700, 350),
-		Vector2(900, 500),
-		Vector2(750, 750),
-		Vector2(1100, 400),
-		Vector2(1000, 700),
-		Vector2(550, 900),
-	]
-	for i in spots.size():
-		var e := Enemy.new()
-		e.name = "Enemy_%d" % i
-		e.configure(def, _rng)
-		e.global_position = spots[i]
-		e.gold_dropped.connect(_on_gold_dropped)
-		_entities.add_child(e)
+	for _i in to_spawn:
+		var pos := _map.sample_spawn_point(
+			_rng,
+			avoid,
+			_spawn_cfg.spawn_min_separation,
+			_spawn_cfg.spawn_edge_margin,
+			true,
+			false
+		)
+		_spawn_one_enemy(def, pos)
+		avoid.append(pos)
+		_occupied_spots.append(pos)
 
 
-func _spawn_chests() -> void:
-	var chest_spots: Array[Vector2] = [
-		Vector2(500, 300),
-		Vector2(1200, 550),
+func _spawn_one_enemy(def: UnitDefinition, at: Vector2) -> Enemy:
+	var e := Enemy.new()
+	e.name = "Enemy_%d" % _enemy_serial
+	_enemy_serial += 1
+	e.configure(def, _rng)
+	e.global_position = at
+	e.gold_dropped.connect(_on_gold_dropped)
+	_entities.add_child(e)
+	return e
+
+
+func _spawn_chest_batch(want: int, respect_cap: bool) -> void:
+	if want <= 0 or _entities == null or _map == null:
+		return
+	var alive := _count_alive_chests()
+	var to_spawn := want
+	if respect_cap:
+		to_spawn = mini(want, maxi(0, _spawn_cfg.max_alive_chests - alive))
+	if to_spawn <= 0:
+		return
+	var avoid := _collect_live_avoid_positions()
+	for _i in to_spawn:
+		var pos := _map.sample_spawn_point(
+			_rng,
+			avoid,
+			_spawn_cfg.spawn_min_separation,
+			_spawn_cfg.spawn_edge_margin,
+			true,
+			true
+		)
+		_spawn_one_chest(pos)
+		avoid.append(pos)
+		_occupied_spots.append(pos)
+
+
+func _collect_live_avoid_positions() -> Array[Vector2]:
+	var avoid: Array[Vector2] = []
+	if _captain != null and is_instance_valid(_captain):
+		avoid.append(_captain.global_position)
+	if _shop != null and is_instance_valid(_shop):
+		avoid.append(_shop.global_position)
+	if not is_inside_tree():
+		return avoid
+	for node in get_tree().get_nodes_in_group(Combatant.GROUP_HOSTILES):
+		if node == null or not is_instance_valid(node):
+			continue
+		if node.get("is_dead") == true:
+			continue
+		if node is Node2D:
+			avoid.append((node as Node2D).global_position)
+	for node in get_tree().get_nodes_in_group(&"chests"):
+		if node == null or not is_instance_valid(node):
+			continue
+		if node.get("is_dead") == true:
+			continue
+		if node is Node2D:
+			avoid.append((node as Node2D).global_position)
+	return avoid
+
+
+func _spawn_one_chest(at: Vector2) -> RoamChest:
+	var chest := RoamChest.new()
+	chest.name = "Chest_%d" % _chest_serial
+	_chest_serial += 1
+	var choices: Array[UnitDefinition] = [
+		_load_unit(PATH_CHEST_A),
+		_load_unit(PATH_CHEST_B),
+		_load_unit(PATH_CHEST_C),
 	]
-	for i in chest_spots.size():
-		var chest := RoamChest.new()
-		chest.name = "Chest_%d" % i
-		var choices: Array[UnitDefinition] = [
-			_load_unit(PATH_CHEST_A),
-			_load_unit(PATH_CHEST_B),
-			_load_unit(PATH_CHEST_C),
-		]
-		# Shuffle lightly so two chests can feel different.
-		if _rng.randf() > 0.5:
-			choices.reverse()
-		chest.configure(60, choices)
-		chest.global_position = chest_spots[i]
-		chest.opened.connect(_on_chest_opened)
-		_entities.add_child(chest)
+	if _rng.randf() > 0.5:
+		choices.reverse()
+	chest.configure(60, choices)
+	chest.global_position = at
+	chest.opened.connect(_on_chest_opened)
+	_entities.add_child(chest)
+	return chest
 
 
 func _spawn_boss() -> void:
@@ -248,7 +348,11 @@ func _spawn_boss() -> void:
 	var behavior := _load_boss_behavior(PATH_BOSS_BEHAVIOR)
 	var minion_def := _load_unit(PATH_BOSS_MINION)
 	boss.configure_behavior(behavior, minion_def)
-	boss.global_position = Vector2(1350, 950)
+	var boss_pos := Vector2(1350, 950)
+	if _map != null and _map.boss_room != null:
+		boss_pos = _map.sample_in_room(_map.boss_room, _rng, _spawn_cfg.spawn_edge_margin * 0.6)
+	boss.global_position = boss_pos
+	_occupied_spots.append(boss_pos)
 	boss.aggro_range = 280.0
 	boss.boss_defeated.connect(_on_boss_defeated)
 	_entities.add_child(boss)
@@ -284,6 +388,32 @@ func recruit_unit(def: UnitDefinition) -> void:
 	member.combat_enabled = not ui_blocking and not game_over
 	_entities.add_child(member)
 	_followers.append(member)
+
+
+func _count_alive_enemies() -> int:
+	if not is_inside_tree():
+		return 0
+	var n := 0
+	for node in get_tree().get_nodes_in_group(Combatant.GROUP_HOSTILES):
+		if node == null or not is_instance_valid(node):
+			continue
+		if node.get("is_dead") == true:
+			continue
+		n += 1
+	return n
+
+
+func _count_alive_chests() -> int:
+	if not is_inside_tree():
+		return 0
+	var n := 0
+	for node in get_tree().get_nodes_in_group(&"chests"):
+		if node == null or not is_instance_valid(node):
+			continue
+		if node.get("is_dead") == true:
+			continue
+		n += 1
+	return n
 
 
 func _open_shop() -> void:
@@ -384,6 +514,14 @@ func _set_combat_enabled(enabled: bool) -> void:
 			(node as Combatant).combat_enabled = enabled
 			if not enabled:
 				(node as Combatant).velocity = Vector2.ZERO
+
+
+func _load_spawn_config() -> WorldSpawnConfig:
+	var res := load(PATH_SPAWN_CFG)
+	if res is WorldSpawnConfig:
+		return (res as WorldSpawnConfig).duplicate(true) as WorldSpawnConfig
+	push_error("GameController: failed to load WorldSpawnConfig %s" % PATH_SPAWN_CFG)
+	return WorldSpawnConfig.new()
 
 
 func _load_unit(path: String) -> UnitDefinition:
