@@ -4,6 +4,7 @@ extends CanvasLayer
 
 
 signal shop_buy_pressed(slot_index: int)
+signal shop_refresh_pressed
 signal shop_closed
 signal chest_pick_pressed(choice_index: int)
 signal restart_pressed
@@ -40,7 +41,7 @@ func refresh_gold(amount: int) -> void:
 		_gold_label.text = "金币: %d" % gold
 
 
-func show_shop(shelf: Array[Dictionary], current_gold: int) -> void:
+func show_shop(shelf: Array[Dictionary], current_gold: int, refresh_cost: int = 10) -> void:
 	refresh_gold(current_gold)
 	_clear_children(_shop_list)
 	for i in shelf.size():
@@ -65,6 +66,12 @@ func show_shop(shelf: Array[Dictionary], current_gold: int) -> void:
 		btn.pressed.connect(func() -> void: shop_buy_pressed.emit(idx))
 		row.add_child(btn)
 		_shop_list.add_child(row)
+	var refresh_btn := Button.new()
+	refresh_btn.text = "刷新（%d金）" % refresh_cost
+	refresh_btn.custom_minimum_size = Vector2(0, 44)
+	refresh_btn.disabled = current_gold < refresh_cost
+	refresh_btn.pressed.connect(func() -> void: shop_refresh_pressed.emit())
+	_shop_list.add_child(refresh_btn)
 	_shop_panel.visible = true
 	_chest_panel.visible = false
 
@@ -140,7 +147,7 @@ func _build_ui() -> void:
 	_joystick.name = "VirtualJoystick"
 	_root.add_child(_joystick)
 
-	_shop_panel = _make_centered_panel(Vector2(340, 280))
+	_shop_panel = _make_centered_panel(Vector2(340, 330))
 	_shop_panel.visible = false
 	_root.add_child(_shop_panel)
 	var shop_v := VBoxContainer.new()

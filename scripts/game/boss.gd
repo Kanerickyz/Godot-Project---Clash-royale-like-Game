@@ -79,6 +79,13 @@ func _apply_body_from_behavior() -> void:
 	if behavior == null:
 		return
 	set_collision_radius(behavior.collision_radius)
+	_sync_aggro_to_charge_distance()
+
+
+func _sync_aggro_to_charge_distance() -> void:
+	if behavior == null:
+		return
+	aggro_range = behavior.charge_distance
 
 
 func _reset_cycle() -> void:

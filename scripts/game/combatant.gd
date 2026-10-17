@@ -31,8 +31,11 @@ var _base_sprite_scale: Vector2 = Vector2.ONE
 var _pose: AnimPose = AnimPose.IDLE
 var _loop_tween: Tween
 var _oneshot_tween: Tween
+var _impact_tween: Tween
 var _out_of_combat_sec: float = 0.0
 var _regen_accum: float = 0.0
+
+const CHARGE_IMPACT_TWEEN_SEC := 0.15
 
 
 func setup(def: UnitDefinition, p_team: Team) -> void:
@@ -111,7 +114,7 @@ func apply_stun(duration: float) -> void:
 	velocity = Vector2.ZERO
 
 
-## Knockback displace, then damage, then short stun. Safe for allies and hostiles.
+## Knockback via short Tween; damage+stun settle once at impact start (no double-hit).
 func apply_charge_impact(
 	push_dir: Vector2,
 	knockback_distance: float,
@@ -123,12 +126,27 @@ func apply_charge_impact(
 	var dir := push_dir.normalized()
 	if dir == Vector2.ZERO:
 		dir = Vector2.RIGHT
-	if knockback_distance > 0.0:
-		global_position += dir * knockback_distance
+	if _impact_tween != null and is_instance_valid(_impact_tween):
+		_impact_tween.kill()
+		_impact_tween = null
+	# Settle damage + stun once at impact start; flash comes from take_damage.
 	if damage > 0:
 		take_damage(damage)
-	if not is_dead and stun_duration > 0.0:
+	if is_dead:
+		return
+	if stun_duration > 0.0:
 		apply_stun(stun_duration)
+	if knockback_distance <= 0.0:
+		return
+	var end_pos := global_position + dir * knockback_distance
+	_impact_tween = create_tween()
+	_impact_tween.tween_property(self, "global_position", end_pos, CHARGE_IMPACT_TWEEN_SEC).set_trans(
+		Tween.TRANS_QUAD
+	).set_ease(Tween.EASE_OUT)
+	if _sprite != null:
+		var punch := create_tween()
+		punch.tween_property(_sprite, "scale", _base_sprite_scale * 1.16, 0.06)
+		punch.tween_property(_sprite, "scale", _base_sprite_scale, 0.1)
 
 
 func _physics_process(delta: float) -> void:

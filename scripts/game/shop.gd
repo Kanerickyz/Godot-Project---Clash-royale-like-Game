@@ -6,8 +6,12 @@ extends Node2D
 signal interact_requested(shop: RoamShop)
 
 const INTERACT_RADIUS := 72.0
+const DEFAULT_REFRESH_COST := 10
+const SHELF_SLOT_COUNT := 3
 
 var shelf: Array[Dictionary] = []  # {unit: UnitDefinition, price: int, sold_out: bool}
+var refresh_cost: int = DEFAULT_REFRESH_COST
+var _pool: Array[Dictionary] = []  # candidate offers {unit, price}
 var _body: ColorRect
 var _label: Label
 var _hint: Label
@@ -17,17 +21,60 @@ var captain_in_range: bool = false
 
 
 func configure(offers: Array[Dictionary]) -> void:
-	shelf.clear()
+	_pool.clear()
 	for offer in offers:
 		var unit: UnitDefinition = offer.get("unit") as UnitDefinition
 		if unit == null:
 			continue
-		shelf.append({
+		_pool.append({
 			"unit": unit.duplicate(true),
+			"price": int(offer.get("price", 0)),
+		})
+	_ensure_visuals()
+	# Initial shelf: first N pool entries in order (no RNG yet).
+	shelf.clear()
+	var count := mini(SHELF_SLOT_COUNT, _pool.size())
+	for i in count:
+		var offer: Dictionary = _pool[i]
+		var unit: UnitDefinition = offer.get("unit") as UnitDefinition
+		shelf.append({
+			"unit": unit.duplicate(true) if unit != null else null,
 			"price": int(offer.get("price", 0)),
 			"sold_out": false,
 		})
-	_ensure_visuals()
+
+
+func refresh_shelf(rng: RandomNumberGenerator) -> void:
+	if _pool.is_empty():
+		return
+	var order: Array[int] = []
+	for i in _pool.size():
+		order.append(i)
+	if rng != null and order.size() > 1:
+		for i in range(order.size() - 1, 0, -1):
+			var j := rng.randi_range(0, i)
+			var tmp := order[i]
+			order[i] = order[j]
+			order[j] = tmp
+	shelf.clear()
+	var count := mini(SHELF_SLOT_COUNT, order.size())
+	for i in count:
+		var offer: Dictionary = _pool[order[i]]
+		var unit: UnitDefinition = offer.get("unit") as UnitDefinition
+		shelf.append({
+			"unit": unit.duplicate(true) if unit != null else null,
+			"price": int(offer.get("price", 0)),
+			"sold_out": false,
+		})
+
+
+func all_sold() -> bool:
+	if shelf.is_empty():
+		return false
+	for slot in shelf:
+		if not bool(slot.get("sold_out", false)):
+			return false
+	return true
 
 
 func mark_sold(index: int) -> void:
