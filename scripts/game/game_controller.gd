@@ -39,6 +39,7 @@ var _shop_idle_sec: float = 0.0
 var _focused_chest: RoamChest
 var _respawn_timer: float = 0.0
 var _next_respawn_interval: float = 30.0
+var _match_elapsed: float = 0.0
 var _enemy_serial: int = 0
 var _chest_serial: int = 0
 var _occupied_spots: Array[Vector2] = []
@@ -54,6 +55,7 @@ func _ready() -> void:
 	add_child(_hud)
 	_hud.refresh_gold(gold)
 	_hud.shop_buy_pressed.connect(_on_shop_buy)
+	_hud.shop_refresh_pressed.connect(_on_shop_refresh)
 	_hud.shop_closed.connect(_on_shop_closed)
 	_hud.chest_pick_pressed.connect(_on_chest_pick)
 	_hud.restart_pressed.connect(_on_restart)
@@ -89,6 +91,8 @@ func get_focused_chest() -> RoamChest:
 
 
 func _process(delta: float) -> void:
+	if not game_over:
+		_match_elapsed += delta
 	if _captain == null or not is_instance_valid(_captain):
 		return
 	_update_chest_focus()
@@ -157,10 +161,16 @@ func _roll_next_respawn_interval() -> void:
 	if _spawn_cfg == null:
 		_next_respawn_interval = 30.0
 		return
-	_next_respawn_interval = _rng.randf_range(
-		_spawn_cfg.respawn_interval_min,
-		_spawn_cfg.respawn_interval_max
-	)
+	var ramp := maxf(0.001, _spawn_cfg.respawn_ramp_duration)
+	var progress := clampf(_match_elapsed / ramp, 0.0, 1.0)
+	var floor_iv := _spawn_cfg.respawn_interval_floor
+	var lo := lerpf(_spawn_cfg.respawn_interval_min, floor_iv, progress)
+	var hi := lerpf(_spawn_cfg.respawn_interval_max, floor_iv, progress)
+	if hi < lo:
+		var tmp := lo
+		lo = hi
+		hi = tmp
+	_next_respawn_interval = _rng.randf_range(lo, hi)
 
 
 func _build_world() -> void:
@@ -353,7 +363,8 @@ func _spawn_boss() -> void:
 		boss_pos = _map.sample_in_room(_map.boss_room, _rng, _spawn_cfg.spawn_edge_margin * 0.6)
 	boss.global_position = boss_pos
 	_occupied_spots.append(boss_pos)
-	boss.aggro_range = 280.0
+	if behavior != null:
+		boss.aggro_range = behavior.charge_distance
 	boss.boss_defeated.connect(_on_boss_defeated)
 	_entities.add_child(boss)
 	var marker := Label.new()
@@ -421,7 +432,7 @@ func _open_shop() -> void:
 		return
 	ui_blocking = true
 	_set_combat_enabled(false)
-	_hud.show_shop(_shop.shelf, gold)
+	_hud.show_shop(_shop.shelf, gold, _shop.refresh_cost)
 
 
 func _on_shop_buy(slot_index: int) -> void:
@@ -437,8 +448,22 @@ func _on_shop_buy(slot_index: int) -> void:
 	gold -= price
 	_shop.mark_sold(slot_index)
 	recruit_unit(unit)
+	if _shop.all_sold():
+		_shop.refresh_shelf(_rng)
 	_hud.refresh_gold(gold)
-	_hud.show_shop(_shop.shelf, gold)
+	_hud.show_shop(_shop.shelf, gold, _shop.refresh_cost)
+
+
+func _on_shop_refresh() -> void:
+	if _shop == null or game_over:
+		return
+	var cost := _shop.refresh_cost
+	if gold < cost:
+		return
+	gold -= cost
+	_shop.refresh_shelf(_rng)
+	_hud.refresh_gold(gold)
+	_hud.show_shop(_shop.shelf, gold, cost)
 
 
 func _on_shop_closed() -> void:

@@ -25,6 +25,10 @@ extends Resource
 @export_group("Respawn")
 @export var respawn_interval_min: float = 25.0
 @export var respawn_interval_max: float = 35.0
+## Shortest effective interval after full ramp (floor).
+@export var respawn_interval_floor: float = 10.0
+## Match seconds to reach floor interval (progress 0→1).
+@export var respawn_ramp_duration: float = 150.0
 @export var respawn_enemy_min: int = 2
 @export var respawn_enemy_max: int = 3
 @export var respawn_chest_chance: float = 0.55
