@@ -5,6 +5,9 @@ extends Node2D
 
 const START_GOLD := 15
 const MAP_SIZE := Vector2(1600, 1200)
+const SHOP_IDLE_OPEN_SEC := 3.0
+const MOVE_IDLE_SPEED := 12.0
+const CHEST_ENGAGE_RADIUS := 110.0
 
 const PATH_CAPTAIN := "res://resources/units/captain.tres"
 const PATH_ALLY_SPEAR := "res://resources/units/ally_spear.tres"
@@ -28,6 +31,8 @@ var _shop: RoamShop
 var _hud: GameHud
 var _followers: Array[SquadMember] = []
 var _pending_chest_choices: Array = []
+var _shop_idle_sec: float = 0.0
+var _focused_chest: RoamChest
 
 
 func _ready() -> void:
@@ -49,25 +54,75 @@ func _ready() -> void:
 	_spawn_boss()
 
 
-func _process(_delta: float) -> void:
+func get_move_vector() -> Vector2:
+	if ui_blocking or game_over:
+		return Vector2.ZERO
+	var dir := Vector2.ZERO
+	if _hud != null:
+		dir += _hud.get_joystick_vector()
+	if Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP):
+		dir.y -= 1.0
+	if Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN):
+		dir.y += 1.0
+	if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT):
+		dir.x -= 1.0
+	if Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT):
+		dir.x += 1.0
+	if dir.length_squared() > 1.0:
+		dir = dir.normalized()
+	return dir
+
+
+func get_focused_chest() -> RoamChest:
+	return _focused_chest
+
+
+func _process(delta: float) -> void:
 	if _captain == null or not is_instance_valid(_captain):
 		return
+	_update_chest_focus()
 	if _shop != null:
-		_shop.set_captain_in_range(_shop.is_captain_near(_captain))
+		var near := _shop.is_captain_near(_captain)
+		_shop.set_captain_in_range(near)
+		_update_shop_idle_open(delta, near)
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if game_over or ui_blocking:
+func _update_shop_idle_open(delta: float, near: bool) -> void:
+	if ui_blocking or game_over or not near:
+		_shop_idle_sec = 0.0
+		if _shop != null:
+			_shop.set_idle_progress(0.0)
 		return
-	if event is InputEventKey and event.pressed and not event.echo:
-		var key_event := event as InputEventKey
-		var key: Key = key_event.physical_keycode
-		if key == KEY_NONE:
-			key = key_event.keycode
-		if key == KEY_E or key == KEY_SPACE:
-			if _shop != null and _shop.captain_in_range:
-				_open_shop()
-				get_viewport().set_input_as_handled()
+	var moving := get_move_vector().length() > 0.15
+	if not moving and _captain.velocity.length() <= MOVE_IDLE_SPEED:
+		_shop_idle_sec += delta
+		_shop.set_idle_progress(_shop_idle_sec / SHOP_IDLE_OPEN_SEC)
+		if _shop_idle_sec >= SHOP_IDLE_OPEN_SEC:
+			_shop_idle_sec = 0.0
+			_shop.set_idle_progress(0.0)
+			_open_shop()
+	else:
+		_shop_idle_sec = 0.0
+		_shop.set_idle_progress(0.0)
+
+
+func _update_chest_focus() -> void:
+	_focused_chest = null
+	if ui_blocking or game_over or not is_inside_tree():
+		return
+	var best_dist := CHEST_ENGAGE_RADIUS
+	for node in get_tree().get_nodes_in_group(&"chests"):
+		if node == null or not is_instance_valid(node):
+			continue
+		if node.get("is_dead") == true:
+			continue
+		var chest := node as RoamChest
+		if chest == null:
+			continue
+		var dist := _captain.global_position.distance_to(chest.global_position)
+		if dist <= best_dist:
+			best_dist = dist
+			_focused_chest = chest
 
 
 func _build_world() -> void:

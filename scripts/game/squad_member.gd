@@ -44,8 +44,18 @@ func _follow_captain(_delta: float) -> void:
 		velocity = Vector2.ZERO
 		move_and_slide()
 		return
-	var angle := float(follow_index + 1) * TAU / 5.0
-	var desired := follow_target.global_position + Vector2(cos(angle), sin(angle)) * follow_distance
+	# When captain camps a chest, peel toward the chest to auto-smash.
+	var desired := follow_target.global_position
+	var gc := get_tree().get_first_node_in_group(&"game_controller") if is_inside_tree() else null
+	var chest: Node2D = null
+	if gc != null and gc.has_method("get_focused_chest"):
+		chest = gc.call("get_focused_chest") as Node2D
+	if chest != null and is_instance_valid(chest):
+		var angle := float(follow_index + 1) * TAU / 5.0
+		desired = chest.global_position + Vector2(cos(angle), sin(angle)) * 28.0
+	else:
+		var angle2 := float(follow_index + 1) * TAU / 5.0
+		desired = follow_target.global_position + Vector2(cos(angle2), sin(angle2)) * follow_distance
 	var to_desired := desired - global_position
 	if to_desired.length() > 8.0:
 		velocity = to_desired.normalized() * get_move_speed()
@@ -55,25 +65,9 @@ func _follow_captain(_delta: float) -> void:
 
 
 func _read_move_vector() -> Vector2:
-	if get_parent() != null:
-		var gc := get_tree().get_first_node_in_group(&"game_controller")
-		if gc != null and (gc.get("ui_blocking") == true or gc.get("game_over") == true):
-			return Vector2.ZERO
-	var dir := Vector2.ZERO
-	if Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP):
-		dir.y -= 1.0
-	if Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN):
-		dir.y += 1.0
-	if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT):
-		dir.x -= 1.0
-	if Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT):
-		dir.x += 1.0
-	if InputMap.has_action("ui_up") and Input.is_action_pressed("ui_up"):
-		dir.y -= 1.0
-	if InputMap.has_action("ui_down") and Input.is_action_pressed("ui_down"):
-		dir.y += 1.0
-	if InputMap.has_action("ui_left") and Input.is_action_pressed("ui_left"):
-		dir.x -= 1.0
-	if InputMap.has_action("ui_right") and Input.is_action_pressed("ui_right"):
-		dir.x += 1.0
-	return dir
+	if not is_inside_tree():
+		return Vector2.ZERO
+	var gc := get_tree().get_first_node_in_group(&"game_controller")
+	if gc != null and gc.has_method("get_move_vector"):
+		return gc.call("get_move_vector") as Vector2
+	return Vector2.ZERO

@@ -92,18 +92,34 @@ func _try_auto_attack() -> void:
 func _find_attack_target() -> Node2D:
 	if definition == null or not is_inside_tree():
 		return null
+	# Prefer chest smash when squad is camping a chest.
+	var focused_chest := _get_focused_chest()
+	if focused_chest != null and team == Team.ALLY and _is_valid_hostile_target(focused_chest):
+		var chest_range := maxf(definition.attack_range, 100.0)
+		if global_position.distance_to(focused_chest.global_position) <= chest_range:
+			return focused_chest
 	var best: Node2D = null
-	var best_dist := definition.attack_range
+	var best_dist := INF
 	for node in get_tree().get_nodes_in_group(GROUP_ATTACKABLE):
 		if node == self or not is_instance_valid(node):
 			continue
 		if not _is_valid_hostile_target(node):
 			continue
+		var range_limit := definition.attack_range
+		if team == Team.ALLY and node.is_in_group(&"chests"):
+			range_limit = maxf(range_limit, 100.0)
 		var dist := global_position.distance_to((node as Node2D).global_position)
-		if dist <= best_dist:
+		if dist <= range_limit and dist < best_dist:
 			best_dist = dist
 			best = node as Node2D
 	return best
+
+
+func _get_focused_chest() -> Node2D:
+	var gc := get_tree().get_first_node_in_group(&"game_controller")
+	if gc != null and gc.has_method("get_focused_chest"):
+		return gc.call("get_focused_chest") as Node2D
+	return null
 
 
 func _is_valid_hostile_target(node: Node) -> bool:

@@ -18,12 +18,19 @@ var _chest_panel: PanelContainer
 var _chest_list: HBoxContainer
 var _end_panel: PanelContainer
 var _end_label: Label
+var _joystick: VirtualJoystick
 
 
 func _ready() -> void:
 	layer = 20
 	_build_ui()
 	refresh_gold(gold)
+
+
+func get_joystick_vector() -> Vector2:
+	if _joystick == null:
+		return Vector2.ZERO
+	return _joystick.get_vector()
 
 
 func refresh_gold(amount: int) -> void:
@@ -113,8 +120,12 @@ func _build_ui() -> void:
 	_hint_label = Label.new()
 	_hint_label.position = Vector2(16, 44)
 	_hint_label.add_theme_font_size_override("font_size", 14)
-	_hint_label.text = "WASD/方向键移动 · E/空格开商店 · 队友自动跟打"
+	_hint_label.text = "左下摇杆/WASD 移动 · 商店旁站住 3 秒开店 · 靠近宝箱自动砸"
 	root.add_child(_hint_label)
+
+	_joystick = VirtualJoystick.new()
+	_joystick.name = "VirtualJoystick"
+	root.add_child(_joystick)
 
 	_shop_panel = _make_panel(Vector2(360, 260), Vector2(460, 180))
 	_shop_panel.visible = false

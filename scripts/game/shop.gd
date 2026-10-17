@@ -11,6 +11,7 @@ var shelf: Array[Dictionary] = []  # {unit: UnitDefinition, price: int, sold_out
 var _body: ColorRect
 var _label: Label
 var _hint: Label
+var _progress: ColorRect
 var _area: Area2D
 var captain_in_range: bool = false
 
@@ -58,6 +59,14 @@ func set_captain_in_range(value: bool) -> void:
 	captain_in_range = value
 
 
+func set_idle_progress(ratio: float) -> void:
+	if _progress == null:
+		return
+	var t := clampf(ratio, 0.0, 1.0)
+	_progress.visible = t > 0.0 and captain_in_range
+	_progress.size.x = 72.0 * t
+
+
 func _ensure_visuals() -> void:
 	if _body == null:
 		_body = ColorRect.new()
@@ -73,11 +82,25 @@ func _ensure_visuals() -> void:
 		add_child(_label)
 	if _hint == null:
 		_hint = Label.new()
-		_hint.text = "[E/空格] 打开货架"
+		_hint.text = "附近站住 3 秒打开"
 		_hint.position = Vector2(-52, 34)
 		_hint.add_theme_font_size_override("font_size", 12)
 		_hint.visible = false
 		add_child(_hint)
+	if _progress == null:
+		var bg := ColorRect.new()
+		bg.name = "IdleProgressBg"
+		bg.size = Vector2(72, 6)
+		bg.position = Vector2(-36, 52)
+		bg.color = Color(0.1, 0.1, 0.12, 0.7)
+		add_child(bg)
+		_progress = ColorRect.new()
+		_progress.name = "IdleProgress"
+		_progress.size = Vector2(0, 6)
+		_progress.position = Vector2(-36, 52)
+		_progress.color = Color(0.45, 0.85, 1.0, 0.9)
+		_progress.visible = false
+		add_child(_progress)
 	if _area == null:
 		_area = Area2D.new()
 		_area.name = "InteractArea"
