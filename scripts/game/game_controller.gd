@@ -162,7 +162,8 @@ func _build_world() -> void:
 
 	var cam := Camera2D.new()
 	cam.name = "Camera2D"
-	cam.zoom = Vector2(1.1, 1.1)
+	# Closer view for phone portrait (iPhone 14 Pro aspect).
+	cam.zoom = Vector2(1.85, 1.85)
 	cam.position_smoothing_enabled = false
 	add_child(cam)
 	_camera_ctrl = CaptainController.new()
@@ -316,7 +317,18 @@ func _on_chest_pick(choice_index: int) -> void:
 	_set_combat_enabled(not game_over)
 
 
-func _on_gold_dropped(amount: int, _at: Vector2) -> void:
+func _on_gold_dropped(amount: int, at: Vector2) -> void:
+	if game_over or amount <= 0:
+		return
+	var drop := GoldPickup.new()
+	drop.name = "GoldPickup"
+	_entities.add_child(drop)
+	drop.global_position = at
+	drop.configure(amount)
+	drop.collected.connect(_on_gold_collected)
+
+
+func _on_gold_collected(amount: int) -> void:
 	if game_over:
 		return
 	gold += amount

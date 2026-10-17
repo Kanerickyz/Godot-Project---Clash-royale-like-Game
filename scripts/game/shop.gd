@@ -79,12 +79,18 @@ func _ensure_visuals() -> void:
 		_label.text = "商店"
 		_label.position = Vector2(-20, -48)
 		_label.add_theme_font_size_override("font_size", 16)
+		var font: Font = UiFonts.get_font()
+		if font != null:
+			_label.add_theme_font_override("font", font)
 		add_child(_label)
 	if _hint == null:
 		_hint = Label.new()
 		_hint.text = "附近站住 3 秒打开"
 		_hint.position = Vector2(-52, 34)
 		_hint.add_theme_font_size_override("font_size", 12)
+		var hint_font: Font = UiFonts.get_font()
+		if hint_font != null:
+			_hint.add_theme_font_override("font", hint_font)
 		_hint.visible = false
 		add_child(_hint)
 	if _progress == null:

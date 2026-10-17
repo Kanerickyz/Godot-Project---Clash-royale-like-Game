@@ -11,17 +11,18 @@ config_version=5
 [application]
 
 config/name="Godot Project"
-config/version="0.2.1"
+config/version="0.3.0"
 run/main_scene="res://scenes/main/main.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://icon.svg"
 
 [display]
 
-window/size/viewport_width=1280
-window/size/viewport_height=720
+window/size/viewport_width=393
+window/size/viewport_height=852
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+window/handheld/orientation=1
 
 [input_devices]
 
