@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="UnitDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/unit_definition.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/sprites/paper_cutout/units/unit_axe_blue.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"ally_axe"
+display_name = "斧手"
+max_hp = 80
+attack_damage = 12
+attack_interval = 0.95
+attack_range = 70.0
+move_speed = 150.0
+sprite = ExtResource("2_tex")
+sprite_scale = 0.2
+gold_drop_min = 0
+gold_drop_max = 0
