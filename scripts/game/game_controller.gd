@@ -43,6 +43,8 @@ var _match_elapsed: float = 0.0
 var _enemy_serial: int = 0
 var _chest_serial: int = 0
 var _occupied_spots: Array[Vector2] = []
+var _hitstop_active: bool = false
+var _hitstop_restore_scale: float = 1.0
 
 
 func _ready() -> void:
@@ -88,6 +90,22 @@ func get_move_vector() -> Vector2:
 
 func get_focused_chest() -> RoamChest:
 	return _focused_chest
+
+
+## Brief global hitstop (real-time). Re-entrant calls while active are ignored.
+func request_hitstop(duration: float = 0.1) -> void:
+	if _hitstop_active or duration <= 0.0 or not is_inside_tree():
+		return
+	_hitstop_active = true
+	_hitstop_restore_scale = Engine.time_scale if Engine.time_scale > 0.0 else 1.0
+	Engine.time_scale = 0.0
+	var timer := get_tree().create_timer(duration, true, false, true)
+	timer.timeout.connect(_end_hitstop, CONNECT_ONE_SHOT)
+
+
+func _end_hitstop() -> void:
+	Engine.time_scale = _hitstop_restore_scale if _hitstop_restore_scale > 0.0 else 1.0
+	_hitstop_active = false
 
 
 func _process(delta: float) -> void:
@@ -149,20 +167,23 @@ func _update_respawn(delta: float) -> void:
 		return
 	_respawn_timer = 0.0
 	_roll_next_respawn_interval()
-	_spawn_enemy_batch(
-		_rng.randi_range(_spawn_cfg.respawn_enemy_min, _spawn_cfg.respawn_enemy_max),
-		true
-	)
+	_spawn_respawn_squad()
 	if _rng.randf() <= _spawn_cfg.respawn_chest_chance:
 		_spawn_chest_batch(_spawn_cfg.respawn_chest_count, true)
+
+
+func _match_progress() -> float:
+	if _spawn_cfg == null:
+		return 0.0
+	var ramp := maxf(0.001, _spawn_cfg.respawn_ramp_duration)
+	return clampf(_match_elapsed / ramp, 0.0, 1.0)
 
 
 func _roll_next_respawn_interval() -> void:
 	if _spawn_cfg == null:
 		_next_respawn_interval = 30.0
 		return
-	var ramp := maxf(0.001, _spawn_cfg.respawn_ramp_duration)
-	var progress := clampf(_match_elapsed / ramp, 0.0, 1.0)
+	var progress := _match_progress()
 	var floor_iv := _spawn_cfg.respawn_interval_floor
 	var lo := lerpf(_spawn_cfg.respawn_interval_min, floor_iv, progress)
 	var hi := lerpf(_spawn_cfg.respawn_interval_max, floor_iv, progress)
@@ -171,6 +192,70 @@ func _roll_next_respawn_interval() -> void:
 		lo = hi
 		hi = tmp
 	_next_respawn_interval = _rng.randf_range(lo, hi)
+
+
+func _roll_respawn_squad_size() -> int:
+	if _spawn_cfg == null:
+		return 2
+	var progress := _match_progress()
+	var lo_f := lerpf(
+		float(_spawn_cfg.respawn_squad_min_start),
+		float(_spawn_cfg.respawn_squad_min_end),
+		progress
+	)
+	var hi_f := lerpf(
+		float(_spawn_cfg.respawn_squad_max_start),
+		float(_spawn_cfg.respawn_squad_max_end),
+		progress
+	)
+	var lo := mini(int(round(lo_f)), int(round(hi_f)))
+	var hi := maxi(int(round(lo_f)), int(round(hi_f)))
+	lo = maxi(1, lo)
+	hi = maxi(lo, hi)
+	return _rng.randi_range(lo, hi)
+
+
+## One clustered squad near a shared room center; respects max_alive_enemies.
+func _spawn_respawn_squad() -> void:
+	if _entities == null or _map == null or _spawn_cfg == null:
+		return
+	var want := _roll_respawn_squad_size()
+	var alive := _count_alive_enemies()
+	var to_spawn := mini(want, maxi(0, _spawn_cfg.max_alive_enemies - alive))
+	if to_spawn <= 0:
+		return
+	var avoid := _collect_live_avoid_positions()
+	var center := _map.sample_spawn_point(
+		_rng,
+		avoid,
+		_spawn_cfg.spawn_min_separation,
+		_spawn_cfg.spawn_edge_margin,
+		true,
+		false
+	)
+	var spread := maxf(24.0, _spawn_cfg.respawn_squad_spread_radius)
+	var def := _load_unit(PATH_ENEMY)
+	for i in to_spawn:
+		var pos := center
+		if to_spawn > 1:
+			var angle := TAU * float(i) / float(to_spawn) + _rng.randf() * 0.4
+			var radius := spread * (0.35 + _rng.randf() * 0.65)
+			pos = center + Vector2(cos(angle), sin(angle)) * radius
+			pos = _clamp_spawn_to_map(pos)
+		_spawn_one_enemy(def, pos)
+		avoid.append(pos)
+		_occupied_spots.append(pos)
+
+
+func _clamp_spawn_to_map(pos: Vector2) -> Vector2:
+	if _map == null:
+		return pos
+	var margin := _spawn_cfg.spawn_edge_margin if _spawn_cfg != null else 40.0
+	var size := _map.map_size
+	return Vector2(
+		clampf(pos.x, margin, maxf(margin, size.x - margin)),
+		clampf(pos.y, margin, maxf(margin, size.y - margin))
+	)
 
 
 func _build_world() -> void:

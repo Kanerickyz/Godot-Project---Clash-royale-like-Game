@@ -29,8 +29,17 @@ extends Resource
 @export var respawn_interval_floor: float = 10.0
 ## Match seconds to reach floor interval (progress 0→1).
 @export var respawn_ramp_duration: float = 150.0
+## Legacy single-batch counts (kept for resource compat; squad fields drive respawn).
 @export var respawn_enemy_min: int = 2
 @export var respawn_enemy_max: int = 3
+## Squad size at match start (progress 0): rolled between min/max inclusive.
+@export var respawn_squad_min_start: int = 2
+@export var respawn_squad_max_start: int = 3
+## Squad size after full ramp (progress 1).
+@export var respawn_squad_min_end: int = 4
+@export var respawn_squad_max_end: int = 6
+## Members of one respawn squad scatter within this radius of a shared center.
+@export var respawn_squad_spread_radius: float = 72.0
 @export var respawn_chest_chance: float = 0.55
 @export var respawn_chest_count: int = 1
 @export var max_alive_enemies: int = 18

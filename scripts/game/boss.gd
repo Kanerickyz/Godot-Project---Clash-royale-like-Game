@@ -31,8 +31,11 @@ var _charge_dir: Vector2 = Vector2.RIGHT
 var _charge_origin: Vector2 = Vector2.ZERO
 var _charge_traveled: float = 0.0
 var _charge_hit_ids: Dictionary = {}
+var _charge_lateral_alt: int = 0
+var _charge_ally_hitstop_done: bool = false
 var _telegraph: Polygon2D
 var _charge_fx_tween: Tween
+const ALLY_HITSTOP_SEC := 0.1
 
 
 func configure(def: UnitDefinition, rng: RandomNumberGenerator) -> void:
@@ -114,6 +117,8 @@ func _reset_cycle() -> void:
 	_next_is_charge = behavior.alternate_start_with_charge if behavior else true
 	_charge_traveled = 0.0
 	_charge_hit_ids.clear()
+	_charge_lateral_alt = 0
+	_charge_ally_hitstop_done = false
 	_clear_telegraph()
 	_kill_charge_fx()
 	_reset_charge_pose()
@@ -150,6 +155,9 @@ func _begin_telegraph() -> void:
 	_charge_dir = _aim_at_squad()
 	_charge_traveled = 0.0
 	_charge_hit_ids.clear()
+	_charge_lateral_alt = 0
+	_charge_ally_hitstop_done = false
+	_mark_in_combat()
 	velocity = Vector2.ZERO
 	_kill_loop_tween()
 	_play_windup_pose()
@@ -171,6 +179,9 @@ func _begin_charge() -> void:
 	_charge_origin = global_position
 	_charge_traveled = 0.0
 	_charge_hit_ids.clear()
+	_charge_lateral_alt = 0
+	_charge_ally_hitstop_done = false
+	_mark_in_combat()
 	# Clear warning so it does not ride the boss; travel is velocity hard-rush only.
 	_clear_telegraph()
 	_play_charge_launch()
@@ -192,6 +203,7 @@ func _tick_charging(delta: float) -> void:
 func _begin_summon() -> void:
 	_phase = Phase.SUMMONING
 	_phase_timer = 0.05
+	_mark_in_combat()
 	velocity = Vector2.ZERO
 	_spawn_minions()
 
@@ -259,12 +271,40 @@ func _hit_group_on_path(group: StringName, half_w: float, path_end: Vector2) -> 
 		if not _is_on_charge_path(other.global_position, path_end, half_w + other.get_collision_radius()):
 			continue
 		_charge_hit_ids[id] = true
+		_mark_in_combat()
+		if group == GROUP_ALLIES:
+			_request_ally_hitstop_once()
 		other.apply_charge_impact(
-			_charge_dir,
+			_build_knockback_dir(),
 			behavior.knockback_distance,
 			behavior.charge_damage,
 			behavior.target_stun_duration
 		)
+
+
+## Forward charge dir + alternating lateral component (still parabolic Tween).
+func _build_knockback_dir() -> Vector2:
+	var forward := _charge_dir.normalized()
+	if forward == Vector2.ZERO:
+		forward = Vector2.RIGHT
+	var ratio := behavior.knockback_lateral_ratio if behavior else 0.35
+	ratio = clampf(ratio, 0.0, 1.0)
+	var side := 1.0 if (_charge_lateral_alt % 2) == 0 else -1.0
+	_charge_lateral_alt += 1
+	var perp := Vector2(-forward.y, forward.x) * side
+	var push := (forward + perp * ratio).normalized()
+	if push == Vector2.ZERO:
+		return forward
+	return push
+
+
+func _request_ally_hitstop_once() -> void:
+	if _charge_ally_hitstop_done or not is_inside_tree():
+		return
+	_charge_ally_hitstop_done = true
+	var gc := get_tree().get_first_node_in_group(&"game_controller")
+	if gc != null and gc.has_method("request_hitstop"):
+		gc.call("request_hitstop", ALLY_HITSTOP_SEC)
 
 
 func _is_on_charge_path(point: Vector2, path_end: Vector2, accept_radius: float) -> bool:
@@ -407,6 +447,28 @@ func _kill_charge_fx() -> void:
 	if _charge_fx_tween != null and is_instance_valid(_charge_fx_tween):
 		_charge_fx_tween.kill()
 	_charge_fx_tween = null
+
+
+func _tick_regen(delta: float) -> void:
+	if definition == null or is_dead:
+		return
+	var delay := behavior.regen_delay if behavior != null else 0.0
+	var per_sec := behavior.regen_per_sec if behavior != null else 0.0
+	if delay <= 0.0 or per_sec <= 0.0:
+		return
+	if current_hp >= definition.max_hp:
+		_out_of_combat_sec = 0.0
+		return
+	_out_of_combat_sec += delta
+	if _out_of_combat_sec < delay:
+		return
+	_regen_accum += per_sec * delta
+	var heal := int(_regen_accum)
+	if heal <= 0:
+		return
+	_regen_accum -= float(heal)
+	current_hp = mini(definition.max_hp, current_hp + heal)
+	_update_hp_bar()
 
 
 func _load_behavior(path: String) -> BossBehaviorConfig:

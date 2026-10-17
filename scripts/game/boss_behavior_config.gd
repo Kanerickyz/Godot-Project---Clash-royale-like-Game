@@ -14,6 +14,8 @@ extends Resource
 @export var charge_path_half_width: float = 48.0
 @export var charge_damage: int = 20
 @export var knockback_distance: float = 100.0
+## Lateral knockback as fraction of forward charge direction (0 = straight).
+@export var knockback_lateral_ratio: float = 0.35
 @export var target_stun_duration: float = 0.75
 @export var boss_stun_after_charge: float = 1.0
 
@@ -21,6 +23,11 @@ extends Resource
 @export var summon_count: int = 2
 @export var summon_radius: float = 90.0
 @export var boss_stun_after_summon: float = 0.9
+
+@export_group("Regen")
+## Seconds out of combat before Boss HP regen starts.
+@export var regen_delay: float = 5.0
+@export var regen_per_sec: float = 10.0
 
 @export_group("Body")
 @export var collision_radius: float = 32.0
