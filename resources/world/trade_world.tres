@@ -1,0 +1,53 @@
+[gd_resource type="Resource" script_class="TradeWorldConfig" load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/trade_world_config.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/game/trade_city_config.gd" id="2_city"]
+[ext_resource type="Script" path="res://scripts/game/trade_recruit_offer.gd" id="3_offer"]
+[ext_resource type="Resource" path="res://resources/units/ally_spear.tres" id="4_spear"]
+[ext_resource type="Resource" path="res://resources/units/ally_archer.tres" id="5_archer"]
+[ext_resource type="Resource" path="res://resources/units/ally_shield.tres" id="6_shield"]
+
+[sub_resource type="Resource" id="City_A"]
+script = ExtResource("2_city")
+display_name = "洛阳"
+world_position = Vector2(100, 420)
+buy_price = 8
+sell_price = 14
+
+[sub_resource type="Resource" id="City_B"]
+script = ExtResource("2_city")
+display_name = "长安"
+world_position = Vector2(290, 420)
+buy_price = 12
+sell_price = 9
+
+[sub_resource type="Resource" id="Offer_Spear"]
+script = ExtResource("3_offer")
+unit = ExtResource("4_spear")
+price = 15
+
+[sub_resource type="Resource" id="Offer_Archer"]
+script = ExtResource("3_offer")
+unit = ExtResource("5_archer")
+price = 25
+
+[sub_resource type="Resource" id="Offer_Shield"]
+script = ExtResource("3_offer")
+unit = ExtResource("6_shield")
+price = 40
+
+[resource]
+script = ExtResource("1_script")
+start_gold = 40
+cargo_display_name = "粮食"
+start_cargo = 0
+cities = [SubResource("City_A"), SubResource("City_B")]
+encounter_chance = 0.4
+world_camera_zoom = 1.0
+token_move_speed = 140.0
+city_arrive_radius = 28.0
+start_city_index = 0
+recruit_offers = [SubResource("Offer_Spear"), SubResource("Offer_Archer"), SubResource("Offer_Shield")]
+combat_enemy_count = 4
+combat_arena_size = Vector2(360, 520)
+combat_camera_zoom = 1.35
