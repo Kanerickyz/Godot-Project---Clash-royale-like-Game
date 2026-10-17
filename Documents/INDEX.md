@@ -11,6 +11,7 @@
 | [Features/boss_summon_charge.md](./Features/boss_summon_charge.md) | 召唤冲撞 Boss（机制差异化） |
 | [Features/roguelike_map_spawn.md](./Features/roguelike_map_spawn.md) | 程序化地图与刷怪/箱 |
 | [Features/combat_shop_spawn_polish.md](./Features/combat_shop_spawn_polish.md) | 撞飞手感 / 商店刷新 / 刷怪加速等 |
+| [Features/spawn_heal_knockback_v2.md](./Features/spawn_heal_knockback_v2.md) | 小队刷怪 / Boss 回血 / 侧向撞飞 / 时停 |
 | [DEVELOPMENT_WORKFLOW.md](./DEVELOPMENT_WORKFLOW.md) | Agent 职责、纵切片流程、L0–L5、**轻量/完全验收** |
 | [WEB_DEPLOY.md](./WEB_DEPLOY.md) | GitHub Pages 浏览器试玩（Actions 导出 Web） |
 | [../AGENTS.md](../AGENTS.md) | 项目级工作规则 |
