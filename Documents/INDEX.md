@@ -1,16 +1,15 @@
 # 文档索引
 
-> Godot 4.6 · 城际跑商沙盒（双层）· harness 与美术素材保留
+> Godot 4.6 · 小队游走招募原型 · harness 与美术素材保留
 
 ## 快速导航
 
 | 文档 | 说明 |
 |------|------|
-| [GAME_VISION.md](./GAME_VISION.md) | 愿景与主循环（城际跑商沙盒） |
-| [Features/city_trade_sandbox.md](./Features/city_trade_sandbox.md) | 双层城池 / 跑商 / 遭遇 / 金币计分 |
-| [Features/squad_roam_prototype.md](./Features/squad_roam_prototype.md) | 旧：小队游走招募原型（机制参考；主循环已替换） |
-| [Features/boss_summon_charge.md](./Features/boss_summon_charge.md) | 召唤冲撞 Boss（机制参考；本愿景不做通关 Boss） |
-| [Features/roguelike_map_spawn.md](./Features/roguelike_map_spawn.md) | 程序化地图与刷怪/箱（战斗层可复用思路） |
+| [GAME_VISION.md](./GAME_VISION.md) | 愿景与主循环 |
+| [Features/squad_roam_prototype.md](./Features/squad_roam_prototype.md) | 小队游走招募原型规格 |
+| [Features/boss_summon_charge.md](./Features/boss_summon_charge.md) | 召唤冲撞 Boss（机制差异化） |
+| [Features/roguelike_map_spawn.md](./Features/roguelike_map_spawn.md) | 程序化地图与刷怪/箱 |
 | [Features/combat_shop_spawn_polish.md](./Features/combat_shop_spawn_polish.md) | 撞飞手感 / 商店刷新 / 刷怪加速等 |
 | [DEVELOPMENT_WORKFLOW.md](./DEVELOPMENT_WORKFLOW.md) | Agent 职责、纵切片流程、L0–L5、**轻量/完全验收** |
 | [WEB_DEPLOY.md](./WEB_DEPLOY.md) | GitHub Pages 浏览器试玩（Actions 导出 Web） |

@@ -1,24 +1,23 @@
 class_name GameHud
 extends CanvasLayer
-## Gold, cargo, city menu, and run-end panels for the trade sandbox.
+## Gold, shop shelf, chest three-pick, win/lose panels.
 
 
-signal city_recruit_pressed(slot_index: int)
-signal city_buy_pressed
-signal city_sell_pressed
-signal city_leave_pressed
+signal shop_buy_pressed(slot_index: int)
+signal shop_refresh_pressed
+signal shop_closed
+signal chest_pick_pressed(choice_index: int)
 signal restart_pressed
 
 var gold: int = 0
-var cargo: int = 0
-var cargo_name: String = "粮食"
 
 var _root: Control
-var _status_label: Label
+var _gold_label: Label
 var _hint_label: Label
-var _city_panel: PanelContainer
-var _city_title: Label
-var _city_body: VBoxContainer
+var _shop_panel: PanelContainer
+var _shop_list: VBoxContainer
+var _chest_panel: PanelContainer
+var _chest_list: HBoxContainer
 var _end_panel: PanelContainer
 var _end_label: Label
 var _joystick: VirtualJoystick
@@ -27,7 +26,7 @@ var _joystick: VirtualJoystick
 func _ready() -> void:
 	layer = 20
 	_build_ui()
-	refresh_status(gold, cargo, cargo_name)
+	refresh_gold(gold)
 
 
 func get_joystick_vector() -> Vector2:
@@ -36,103 +35,84 @@ func get_joystick_vector() -> Vector2:
 	return _joystick.get_vector()
 
 
-func refresh_status(p_gold: int, p_cargo: int, p_cargo_name: String = "") -> void:
-	gold = p_gold
-	cargo = p_cargo
-	if not p_cargo_name.is_empty():
-		cargo_name = p_cargo_name
-	if _status_label != null:
-		_status_label.text = "金币: %d    %s: %d" % [gold, cargo_name, cargo]
-
-
 func refresh_gold(amount: int) -> void:
-	refresh_status(amount, cargo, cargo_name)
+	gold = amount
+	if _gold_label != null:
+		_gold_label.text = "金币: %d" % gold
+
+
+func show_shop(shelf: Array[Dictionary], current_gold: int, refresh_cost: int = 10) -> void:
+	refresh_gold(current_gold)
+	_clear_children(_shop_list)
+	for i in shelf.size():
+		var slot: Dictionary = shelf[i]
+		var unit: UnitDefinition = slot.get("unit") as UnitDefinition
+		var price: int = int(slot.get("price", 0))
+		var sold: bool = bool(slot.get("sold_out", false))
+		var row := HBoxContainer.new()
+		var name_l := Label.new()
+		var unit_name := "?" if unit == null else unit.display_name
+		if sold:
+			name_l.text = "%s — 售罄" % unit_name
+		else:
+			name_l.text = "%s — %d 金" % [unit_name, price]
+		name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(name_l)
+		var btn := Button.new()
+		btn.text = "购买"
+		btn.custom_minimum_size = Vector2(0, 44)
+		btn.disabled = sold or current_gold < price or unit == null
+		var idx := i
+		btn.pressed.connect(func() -> void: shop_buy_pressed.emit(idx))
+		row.add_child(btn)
+		_shop_list.add_child(row)
+	var refresh_btn := Button.new()
+	refresh_btn.text = "刷新（%d金）" % refresh_cost
+	refresh_btn.custom_minimum_size = Vector2(0, 44)
+	refresh_btn.disabled = current_gold < refresh_cost
+	refresh_btn.pressed.connect(func() -> void: shop_refresh_pressed.emit())
+	_shop_list.add_child(refresh_btn)
+	_shop_panel.visible = true
+	_chest_panel.visible = false
+
+
+func hide_shop() -> void:
+	_shop_panel.visible = false
+
+
+func show_chest_pick(choices: Array) -> void:
+	_clear_children(_chest_list)
+	for i in choices.size():
+		var unit: UnitDefinition = choices[i] as UnitDefinition
+		var btn := Button.new()
+		btn.custom_minimum_size = Vector2(100, 88)
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if unit == null:
+			btn.text = "空"
+			btn.disabled = true
+		else:
+			btn.text = "招募\n%s\nHP%d 攻%d" % [unit.display_name, unit.max_hp, unit.attack_damage]
+		var idx := i
+		btn.pressed.connect(func() -> void: chest_pick_pressed.emit(idx))
+		_chest_list.add_child(btn)
+	_chest_panel.visible = true
+	_shop_panel.visible = false
+
+
+func hide_chest_pick() -> void:
+	_chest_panel.visible = false
+
+
+func show_end(won: bool) -> void:
+	_end_label.text = "胜利！击败 Boss" if won else "失败…队长阵亡"
+	_end_panel.visible = true
+	_shop_panel.visible = false
+	_chest_panel.visible = false
 
 
 func set_world_hint(text: String) -> void:
 	if _hint_label != null:
 		_hint_label.text = text
-
-
-func show_city_menu(
-	city_name: String,
-	buy_price: int,
-	sell_price: int,
-	offers: Array[Dictionary],
-	current_gold: int,
-	current_cargo: int,
-	p_cargo_name: String
-) -> void:
-	refresh_status(current_gold, current_cargo, p_cargo_name)
-	if _city_title != null:
-		_city_title.text = "%s · 城内" % city_name
-	_clear_children(_city_body)
-
-	var trade_l := Label.new()
-	trade_l.text = "%s  买入 %d金 / 卖出 %d金" % [p_cargo_name, buy_price, sell_price]
-	trade_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_city_body.add_child(trade_l)
-
-	var trade_row := HBoxContainer.new()
-	trade_row.add_theme_constant_override("separation", 8)
-	var buy_btn := Button.new()
-	buy_btn.text = "买货"
-	buy_btn.custom_minimum_size = Vector2(0, 44)
-	buy_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	buy_btn.disabled = current_gold < buy_price or buy_price <= 0
-	buy_btn.pressed.connect(func() -> void: city_buy_pressed.emit())
-	trade_row.add_child(buy_btn)
-	var sell_btn := Button.new()
-	sell_btn.text = "卖货"
-	sell_btn.custom_minimum_size = Vector2(0, 44)
-	sell_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sell_btn.disabled = current_cargo <= 0 or sell_price <= 0
-	sell_btn.pressed.connect(func() -> void: city_sell_pressed.emit())
-	trade_row.add_child(sell_btn)
-	_city_body.add_child(trade_row)
-
-	var recruit_title := Label.new()
-	recruit_title.text = "招人"
-	recruit_title.add_theme_font_size_override("font_size", 16)
-	_city_body.add_child(recruit_title)
-
-	for i in offers.size():
-		var slot: Dictionary = offers[i]
-		var unit: UnitDefinition = slot.get("unit") as UnitDefinition
-		var price: int = int(slot.get("price", 0))
-		var row := HBoxContainer.new()
-		var name_l := Label.new()
-		var unit_name := "?" if unit == null else unit.display_name
-		name_l.text = "%s — %d 金" % [unit_name, price]
-		name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(name_l)
-		var btn := Button.new()
-		btn.text = "招募"
-		btn.custom_minimum_size = Vector2(0, 44)
-		btn.disabled = unit == null or current_gold < price
-		var idx := i
-		btn.pressed.connect(func() -> void: city_recruit_pressed.emit(idx))
-		row.add_child(btn)
-		_city_body.add_child(row)
-
-	var leave_btn := Button.new()
-	leave_btn.text = "离开"
-	leave_btn.custom_minimum_size = Vector2(0, 48)
-	leave_btn.pressed.connect(func() -> void: city_leave_pressed.emit())
-	_city_body.add_child(leave_btn)
-
-	_city_panel.visible = true
-	_end_panel.visible = false
-
-
-func hide_city_menu() -> void:
-	_city_panel.visible = false
-
-
-func show_end(score_gold: int) -> void:
-	_end_label.text = "失败…队长阵亡\n本局分数（金币）: %d\n持货已作废" % score_gold
-	_end_panel.visible = true
-	_city_panel.visible = false
 
 
 func _build_ui() -> void:
@@ -142,58 +122,71 @@ func _build_ui() -> void:
 	UiFonts.apply_to_control(_root)
 	add_child(_root)
 
-	_status_label = Label.new()
-	_status_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	_status_label.offset_left = 16
-	_status_label.offset_top = 16
-	_status_label.offset_right = -16
-	_status_label.offset_bottom = 48
-	_status_label.add_theme_font_size_override("font_size", 20)
-	_status_label.text = "金币: 0    粮食: 0"
-	_root.add_child(_status_label)
+	_gold_label = Label.new()
+	_gold_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_gold_label.offset_left = 16
+	_gold_label.offset_top = 16
+	_gold_label.offset_right = -16
+	_gold_label.offset_bottom = 48
+	_gold_label.add_theme_font_size_override("font_size", 22)
+	_gold_label.text = "金币: 0"
+	_root.add_child(_gold_label)
 
 	_hint_label = Label.new()
 	_hint_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	_hint_label.offset_left = 16
 	_hint_label.offset_top = 48
 	_hint_label.offset_right = -16
-	_hint_label.offset_bottom = 110
+	_hint_label.offset_bottom = 100
 	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_hint_label.add_theme_font_size_override("font_size", 13)
-	_hint_label.text = "摇杆/WASD 在城际路线上行军 · 抵达城池可进城"
+	_hint_label.text = "底部摇杆移动 · 商店旁站住3秒 · 捡金币 · 靠近宝箱自动砸"
 	_root.add_child(_hint_label)
 
 	_joystick = VirtualJoystick.new()
 	_joystick.name = "VirtualJoystick"
 	_root.add_child(_joystick)
 
-	_city_panel = _make_centered_panel(Vector2(340, 460))
-	_city_panel.visible = false
-	_root.add_child(_city_panel)
-	var city_v := VBoxContainer.new()
-	city_v.add_theme_constant_override("separation", 8)
-	_city_panel.add_child(city_v)
-	_city_title = Label.new()
-	_city_title.text = "城内"
-	_city_title.add_theme_font_size_override("font_size", 20)
-	city_v.add_child(_city_title)
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.custom_minimum_size = Vector2(0, 360)
-	city_v.add_child(scroll)
-	_city_body = VBoxContainer.new()
-	_city_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_city_body.add_theme_constant_override("separation", 6)
-	scroll.add_child(_city_body)
+	_shop_panel = _make_centered_panel(Vector2(340, 330))
+	_shop_panel.visible = false
+	_root.add_child(_shop_panel)
+	var shop_v := VBoxContainer.new()
+	_shop_panel.add_child(shop_v)
+	var shop_title := Label.new()
+	shop_title.text = "商店货架"
+	shop_title.add_theme_font_size_override("font_size", 20)
+	shop_v.add_child(shop_title)
+	_shop_list = VBoxContainer.new()
+	shop_v.add_child(_shop_list)
+	var close_btn := Button.new()
+	close_btn.text = "关闭"
+	close_btn.custom_minimum_size = Vector2(0, 44)
+	close_btn.pressed.connect(func() -> void:
+		hide_shop()
+		shop_closed.emit()
+	)
+	shop_v.add_child(close_btn)
 
-	_end_panel = _make_centered_panel(Vector2(300, 220))
+	_chest_panel = _make_centered_panel(Vector2(360, 220))
+	_chest_panel.visible = false
+	_root.add_child(_chest_panel)
+	var chest_v := VBoxContainer.new()
+	_chest_panel.add_child(chest_v)
+	var chest_title := Label.new()
+	chest_title.text = "宝箱三选一（免费入队）"
+	chest_title.add_theme_font_size_override("font_size", 18)
+	chest_v.add_child(chest_title)
+	_chest_list = HBoxContainer.new()
+	_chest_list.alignment = BoxContainer.ALIGNMENT_CENTER
+	chest_v.add_child(_chest_list)
+
+	_end_panel = _make_centered_panel(Vector2(300, 180))
 	_end_panel.visible = false
 	_root.add_child(_end_panel)
 	var end_v := VBoxContainer.new()
-	end_v.add_theme_constant_override("separation", 12)
 	_end_panel.add_child(end_v)
 	_end_label = Label.new()
-	_end_label.add_theme_font_size_override("font_size", 20)
+	_end_label.add_theme_font_size_override("font_size", 24)
 	_end_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_end_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	end_v.add_child(_end_label)
