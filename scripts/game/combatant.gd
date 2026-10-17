@@ -22,6 +22,8 @@ var is_dead: bool = false
 var combat_enabled: bool = true
 
 var _attack_cd: float = 0.0
+var _stun_remaining: float = 0.0
+var _collision_radius: float = 14.0
 var _sprite: Sprite2D
 var _hp_bg: ColorRect
 var _hp_fill: ColorRect
@@ -81,8 +83,64 @@ func get_move_speed() -> float:
 	return definition.move_speed
 
 
+func get_collision_radius() -> float:
+	return _collision_radius
+
+
+func set_collision_radius(radius: float) -> void:
+	_collision_radius = maxf(4.0, radius)
+	_ensure_visuals()
+	var shape_node := get_node_or_null("CollisionShape2D") as CollisionShape2D
+	if shape_node == null:
+		return
+	var circle := shape_node.shape as CircleShape2D
+	if circle == null:
+		circle = CircleShape2D.new()
+		shape_node.shape = circle
+	circle.radius = _collision_radius
+
+
+func is_stunned() -> bool:
+	return _stun_remaining > 0.0
+
+
+func apply_stun(duration: float) -> void:
+	if is_dead or duration <= 0.0:
+		return
+	_stun_remaining = maxf(_stun_remaining, duration)
+	velocity = Vector2.ZERO
+
+
+## Knockback displace, then damage, then short stun. Safe for allies and hostiles.
+func apply_charge_impact(
+	push_dir: Vector2,
+	knockback_distance: float,
+	damage: int,
+	stun_duration: float
+) -> void:
+	if is_dead:
+		return
+	var dir := push_dir.normalized()
+	if dir == Vector2.ZERO:
+		dir = Vector2.RIGHT
+	if knockback_distance > 0.0:
+		global_position += dir * knockback_distance
+	if damage > 0:
+		take_damage(damage)
+	if not is_dead and stun_duration > 0.0:
+		apply_stun(stun_duration)
+
+
 func _physics_process(delta: float) -> void:
 	if is_dead:
+		return
+	if _stun_remaining > 0.0:
+		_stun_remaining = maxf(0.0, _stun_remaining - delta)
+		_attack_cd = maxf(0.0, _attack_cd - delta)
+		velocity = Vector2.ZERO
+		move_and_slide()
+		_update_move_pose()
+		_tick_regen(delta)
 		return
 	if not combat_enabled:
 		velocity = Vector2.ZERO
@@ -210,9 +268,14 @@ func _ensure_visuals() -> void:
 		var shape := CollisionShape2D.new()
 		shape.name = "CollisionShape2D"
 		var circle := CircleShape2D.new()
-		circle.radius = 14.0
+		circle.radius = _collision_radius
 		shape.shape = circle
 		add_child(shape)
+	else:
+		var existing := get_node("CollisionShape2D") as CollisionShape2D
+		var circle2 := existing.shape as CircleShape2D
+		if circle2 != null:
+			circle2.radius = _collision_radius
 
 
 func _apply_sprite() -> void:

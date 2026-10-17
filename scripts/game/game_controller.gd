@@ -15,6 +15,8 @@ const PATH_ALLY_ARCHER := "res://resources/units/ally_archer.tres"
 const PATH_ALLY_SHIELD := "res://resources/units/ally_shield.tres"
 const PATH_ENEMY := "res://resources/units/enemy_grunt.tres"
 const PATH_BOSS := "res://resources/units/boss.tres"
+const PATH_BOSS_BEHAVIOR := "res://resources/combat/boss_summon_charge.tres"
+const PATH_BOSS_MINION := "res://resources/units/boss_minion.tres"
 const PATH_CHEST_A := "res://resources/units/ally_hunter.tres"
 const PATH_CHEST_B := "res://resources/units/ally_axe.tres"
 const PATH_CHEST_C := "res://resources/units/ally_musket.tres"
@@ -243,15 +245,32 @@ func _spawn_boss() -> void:
 	var boss := Boss.new()
 	boss.name = "Boss"
 	boss.configure(def, _rng)
+	var behavior := _load_boss_behavior(PATH_BOSS_BEHAVIOR)
+	var minion_def := _load_unit(PATH_BOSS_MINION)
+	boss.configure_behavior(behavior, minion_def)
 	boss.global_position = Vector2(1350, 950)
 	boss.aggro_range = 280.0
 	boss.boss_defeated.connect(_on_boss_defeated)
 	_entities.add_child(boss)
 	var marker := Label.new()
 	marker.text = "BOSS"
-	marker.position = Vector2(-20, -70)
+	marker.position = Vector2(-28, -78)
 	marker.add_theme_font_size_override("font_size", 14)
 	boss.add_child(marker)
+
+
+## Spawns a hostile minion under Entities (Boss summons). Connects gold drop.
+func spawn_hostile_minion(def: UnitDefinition, at: Vector2) -> Enemy:
+	if def == null or _entities == null:
+		return null
+	var e := Enemy.new()
+	e.name = "BossMinion_%d" % _entities.get_child_count()
+	e.configure(def, _rng)
+	e.global_position = at
+	e.aggro_range = 200.0
+	e.gold_dropped.connect(_on_gold_dropped)
+	_entities.add_child(e)
+	return e
 
 
 func recruit_unit(def: UnitDefinition) -> void:
@@ -377,6 +396,14 @@ func _load_unit(path: String) -> UnitDefinition:
 		push_error("GameController: not UnitDefinition %s" % path)
 		return _make_fallback_unit(path.get_file())
 	return def
+
+
+func _load_boss_behavior(path: String) -> BossBehaviorConfig:
+	var res := load(path)
+	if res is BossBehaviorConfig:
+		return (res as BossBehaviorConfig).duplicate(true) as BossBehaviorConfig
+	push_error("GameController: failed to load BossBehaviorConfig %s" % path)
+	return BossBehaviorConfig.new()
 
 
 func _make_fallback_unit(name_hint: String) -> UnitDefinition:

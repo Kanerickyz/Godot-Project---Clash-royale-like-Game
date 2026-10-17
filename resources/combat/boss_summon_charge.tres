@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="BossBehaviorConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/boss_behavior_config.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+pressure_duration = 2.4
+pressure_move_speed_scale = 0.5
+telegraph_duration = 1.1
+charge_speed = 450.0
+charge_distance = 520.0
+charge_path_half_width = 60.0
+charge_damage = 30
+knockback_distance = 120.0
+target_stun_duration = 0.8
+boss_stun_after_charge = 1.35
+summon_count = 2
+summon_radius = 100.0
+boss_stun_after_summon = 1.0
+collision_radius = 40.0
+alternate_start_with_charge = true

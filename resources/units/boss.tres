@@ -7,12 +7,12 @@
 script = ExtResource("1_script")
 id = &"boss"
 display_name = "Boss"
-max_hp = 300
-attack_damage = 15
-attack_interval = 1.0
+max_hp = 420
+attack_damage = 12
+attack_interval = 1.2
 attack_range = 90.0
-move_speed = 100.0
+move_speed = 90.0
 sprite = ExtResource("2_tex")
-sprite_scale = 0.28
+sprite_scale = 0.42
 gold_drop_min = 0
 gold_drop_max = 0
