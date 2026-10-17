@@ -28,5 +28,10 @@ static func _load_scene(path: String) -> bool:
 	if node == null:
 		push_error("ProjectLoadSmokeTest: instantiate failed %s" % path)
 		return false
+	# Fail if the root script failed to compile/attach (instantiate can still succeed).
+	if path.ends_with("main.tscn") and node.get_script() == null:
+		push_error("ProjectLoadSmokeTest: main scene root has no script (compile failed?) %s" % path)
+		node.free()
+		return false
 	node.free()
 	return true
