@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="WorldSpawnConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/world_spawn_config.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+map_size = Vector2(2800, 2200)
+camera_zoom = 1.5
+room_count_min = 5
+room_count_max = 8
+room_size_min = Vector2(280, 220)
+room_size_max = Vector2(480, 380)
+corridor_width = 80.0
+room_padding = 40.0
+room_margin = 48.0
+start_enemy_min = 8
+start_enemy_max = 10
+start_chest_min = 3
+start_chest_max = 4
+spawn_min_separation = 90.0
+spawn_edge_margin = 56.0
+respawn_interval_min = 25.0
+respawn_interval_max = 35.0
+respawn_enemy_min = 2
+respawn_enemy_max = 3
+respawn_chest_chance = 0.55
+respawn_chest_count = 1
+max_alive_enemies = 18
+max_alive_chests = 6

@@ -9,11 +9,11 @@
 
 ## 主循环
 
-1. 开局只有队长一人进入小地图。
-2. 游走遭遇敌人，打赢后地上掉落金币，队长捡起才入账（不直接加人）。
+1. 开局只有队长一人进入**程序化分区大地图**（类 roguelike 房间/走廊布局，每局可不同）。
+2. 游走遭遇敌人，打赢后地上掉落金币，队长捡起才入账（不直接加人）；敌人与宝箱开局随机刷，并随时间续刷。
 3. 到地图上的商店建筑附近站住约 3 秒，打开固定货架，用金币招募队友。
 4. 或停在有血量的宝箱附近自动砸开，三选一角色入队（免费、偏冒险）。
-5. Boss 与玩家同图共存；选出时机挑战；击败即胜，队伍无法再战即败。Boss 为召唤冲撞型（大体型、路径冲撞撞飞、召唤小兵），细则见 [Features/boss_summon_charge.md](./Features/boss_summon_charge.md)。
+5. Boss 与玩家同图共存；选出时机挑战；击败即胜，队伍无法再战即败。Boss 为召唤冲撞型（大体型、路径冲撞撞飞、召唤小兵），细则见 [Features/boss_summon_charge.md](./Features/boss_summon_charge.md)。地图与刷怪见 [Features/roguelike_map_spawn.md](./Features/roguelike_map_spawn.md)。
 
 ## 已拍板操作与边界
 
