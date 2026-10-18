@@ -31,6 +31,7 @@ var _base_sprite_scale: Vector2 = Vector2.ONE
 var _pose: AnimPose = AnimPose.IDLE
 var _loop_tween: Tween
 var _oneshot_tween: Tween
+var _hit_react_tween: Tween
 var _impact_tween: Tween
 var _impact_flying: bool = false
 var _impact_start: Vector2 = Vector2.ZERO
@@ -42,6 +43,19 @@ var _regen_accum: float = 0.0
 const CHARGE_IMPACT_TWEEN_SEC := 0.4
 const CHARGE_IMPACT_ARC_HEIGHT := 28.0
 const CHARGE_IMPACT_SPIN_RAD := 0.35
+
+## Auto-attack juice (presentation only; damage/interval unchanged).
+const ATTACK_ANTICIPATION_SEC := 0.045
+const ATTACK_LUNGE_SEC := 0.055
+const ATTACK_RECOVER_SEC := 0.11
+const ATTACK_PULL_PX := 7.0
+const ATTACK_LUNGE_PX := 18.0
+const ATTACK_SQUASH := Vector2(0.82, 1.18)
+const ATTACK_STRETCH := Vector2(1.28, 0.82)
+const HIT_RECOIL_PX := 11.0
+const HIT_SQUASH := Vector2(1.2, 0.78)
+const HIT_REACT_OUT_SEC := 0.05
+const HIT_REACT_BACK_SEC := 0.12
 
 
 func setup(def: UnitDefinition, p_team: Team) -> void:
@@ -226,9 +240,33 @@ func _try_auto_attack() -> void:
 		return
 	if target.has_method("take_damage"):
 		target.call("take_damage", definition.attack_damage)
+	var target_node := target as Node2D
+	if target_node != null:
+		_spawn_hit_spark(global_position.lerp(target_node.global_position, 0.55))
+		if target is Combatant:
+			(target as Combatant).play_hit_react(global_position)
 	_mark_in_combat()
-	_play_attack_punch(target as Node2D)
+	_play_attack_punch(target_node)
 	_attack_cd = definition.attack_interval
+
+
+## Sprite-local recoil / squash when struck by auto-attack (no gameplay displacement).
+func play_hit_react(from_global: Vector2) -> void:
+	if is_dead or _sprite == null or _impact_flying:
+		return
+	var away := (global_position - from_global).normalized()
+	if away == Vector2.ZERO:
+		away = Vector2.LEFT
+	if _hit_react_tween != null and is_instance_valid(_hit_react_tween):
+		_hit_react_tween.kill()
+	_sprite.flip_h = away.x > 0.0
+	_hit_react_tween = create_tween()
+	_hit_react_tween.set_parallel(true)
+	_hit_react_tween.tween_property(_sprite, "position", away * HIT_RECOIL_PX, HIT_REACT_OUT_SEC).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_hit_react_tween.tween_property(_sprite, "scale", _base_sprite_scale * HIT_SQUASH, HIT_REACT_OUT_SEC)
+	_hit_react_tween.set_parallel(false)
+	_hit_react_tween.tween_property(_sprite, "position", Vector2.ZERO, HIT_REACT_BACK_SEC).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_hit_react_tween.parallel().tween_property(_sprite, "scale", _base_sprite_scale, HIT_REACT_BACK_SEC)
 
 
 func _find_attack_target() -> Node2D:
@@ -438,11 +476,15 @@ func _play_attack_punch(target: Node2D) -> void:
 		dir = (target.global_position - global_position).normalized()
 		if dir == Vector2.ZERO:
 			dir = Vector2.RIGHT
+	_sprite.flip_h = dir.x < 0.0
+	# Anticipation → lunge stretch → recover.
 	_oneshot_tween = create_tween()
-	_oneshot_tween.tween_property(_sprite, "position", dir * 10.0, 0.07)
-	_oneshot_tween.parallel().tween_property(_sprite, "scale", _base_sprite_scale * 1.12, 0.07)
-	_oneshot_tween.tween_property(_sprite, "position", Vector2.ZERO, 0.12)
-	_oneshot_tween.parallel().tween_property(_sprite, "scale", _base_sprite_scale, 0.12)
+	_oneshot_tween.tween_property(_sprite, "position", -dir * ATTACK_PULL_PX, ATTACK_ANTICIPATION_SEC).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_oneshot_tween.parallel().tween_property(_sprite, "scale", _base_sprite_scale * ATTACK_SQUASH, ATTACK_ANTICIPATION_SEC)
+	_oneshot_tween.tween_property(_sprite, "position", dir * ATTACK_LUNGE_PX, ATTACK_LUNGE_SEC).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_oneshot_tween.parallel().tween_property(_sprite, "scale", _base_sprite_scale * ATTACK_STRETCH, ATTACK_LUNGE_SEC)
+	_oneshot_tween.tween_property(_sprite, "position", Vector2.ZERO, ATTACK_RECOVER_SEC).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_oneshot_tween.parallel().tween_property(_sprite, "scale", _base_sprite_scale, ATTACK_RECOVER_SEC)
 	_oneshot_tween.tween_callback(func() -> void:
 		if is_dead:
 			return
@@ -451,12 +493,45 @@ func _play_attack_punch(target: Node2D) -> void:
 	)
 
 
+func _spawn_hit_spark(at: Vector2) -> void:
+	var parent := get_parent()
+	if parent == null:
+		return
+	var spark := Node2D.new()
+	spark.z_index = 30
+	parent.add_child(spark)
+	spark.global_position = at
+	var burst := Polygon2D.new()
+	burst.color = Color(1.0, 0.92, 0.45, 0.95)
+	burst.polygon = PackedVector2Array([
+		Vector2(0, -10), Vector2(3, -3), Vector2(10, 0), Vector2(3, 3),
+		Vector2(0, 10), Vector2(-3, 3), Vector2(-10, 0), Vector2(-3, -3),
+	])
+	spark.add_child(burst)
+	var ring := Polygon2D.new()
+	ring.color = Color(1.0, 1.0, 1.0, 0.55)
+	ring.polygon = PackedVector2Array([
+		Vector2(0, -5), Vector2(5, 0), Vector2(0, 5), Vector2(-5, 0),
+	])
+	spark.add_child(ring)
+	var tw := spark.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(burst, "scale", Vector2(1.8, 1.8), 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(burst, "modulate:a", 0.0, 0.14)
+	tw.tween_property(ring, "scale", Vector2(2.4, 2.4), 0.14)
+	tw.tween_property(ring, "modulate:a", 0.0, 0.14)
+	tw.chain().tween_callback(spark.queue_free)
+
+
 func _flash_hit() -> void:
 	if _sprite == null or is_dead:
 		return
 	var tw := create_tween()
-	tw.tween_property(_sprite, "modulate", Color(1.0, 0.45, 0.45, 1.0), 0.05)
-	tw.tween_property(_sprite, "modulate", Color.WHITE, 0.12)
+	# Bright contact flash → red sting → recover.
+	tw.tween_property(_sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.0)
+	tw.tween_property(_sprite, "modulate", Color(1.6, 1.6, 1.6, 1.0), 0.03)
+	tw.tween_property(_sprite, "modulate", Color(1.0, 0.35, 0.35, 1.0), 0.05)
+	tw.tween_property(_sprite, "modulate", Color.WHITE, 0.14)
 
 
 func _play_death_anim() -> void:
