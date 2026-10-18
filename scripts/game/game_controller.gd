@@ -266,7 +266,7 @@ func _build_world() -> void:
 	ground_host.name = "GroundHost"
 	ground_host.z_index = -10
 	add_child(ground_host)
-	_map.build_visuals(ground_host)
+	_map.build_visuals(ground_host, _rng)
 
 	_entities = Node2D.new()
 	_entities.name = "Entities"
