@@ -348,10 +348,20 @@ func _apply_sprite() -> void:
 	_sprite.scale = _base_sprite_scale
 	_sprite.modulate = Color.WHITE
 	_sprite.rotation = 0.0
+	_refresh_y_sort_origin()
 	if team == Team.HOSTILE:
 		_hp_fill.color = Color(0.9, 0.3, 0.25, 1.0)
 	else:
 		_hp_fill.color = Color(0.25, 0.85, 0.35, 1.0)
+
+
+## Centered sprites: sort by approximate feet so lower units draw in front.
+func _refresh_y_sort_origin() -> void:
+	if _sprite != null and _sprite.texture != null:
+		var half_h := float(_sprite.texture.get_height()) * absf(_sprite.scale.y) * 0.5
+		y_sort_origin = int(round(half_h))
+	else:
+		y_sort_origin = int(round(_collision_radius))
 
 
 func _update_hp_bar() -> void:
