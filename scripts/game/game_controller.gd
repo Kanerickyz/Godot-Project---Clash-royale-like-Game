@@ -270,6 +270,7 @@ func _build_world() -> void:
 
 	_entities = Node2D.new()
 	_entities.name = "Entities"
+	_entities.y_sort_enabled = true
 	add_child(_entities)
 
 	var zoom := _spawn_cfg.camera_zoom if _spawn_cfg != null else 1.5
