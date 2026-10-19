@@ -19,7 +19,6 @@ var rooms: Array[Room] = []
 var corridors: Array[Rect2] = []
 var safe_room: Room
 var boss_room: Room
-var _paint_rng := RandomNumberGenerator.new()
 
 
 func generate(cfg: WorldSpawnConfig, rng: RandomNumberGenerator) -> void:
@@ -36,33 +35,12 @@ func generate(cfg: WorldSpawnConfig, rng: RandomNumberGenerator) -> void:
 	_assign_special_rooms()
 
 
-func build_visuals(parent: Node2D, rng: RandomNumberGenerator = null) -> void:
+func build_visuals(parent: Node2D, _rng: RandomNumberGenerator = null) -> void:
 	if parent == null:
 		return
-	if rng != null:
-		_paint_rng.seed = rng.randi()
-	else:
-		_paint_rng.randomize()
 
 	var cols := maxi(1, int(ceili(map_size.x / float(TILE))))
 	var rows := maxi(1, int(ceili(map_size.y / float(TILE))))
-	var walkable := _make_bool_grid(cols, rows, false)
-	var path_grid := _make_bool_grid(cols, rows, false)
-	var water_grid := _make_bool_grid(cols, rows, false)
-
-	for corridor in corridors:
-		_mark_rect_cells(path_grid, corridor, cols, rows, true)
-		_mark_rect_cells(walkable, corridor, cols, rows, true)
-	for room in rooms:
-		_mark_rect_cells(walkable, room.rect, cols, rows, true)
-		_mark_room_paths(path_grid, room, cols, rows)
-
-	_carve_river(water_grid, path_grid, cols, rows)
-	# Water wins over dirt path where they overlap.
-	for y in rows:
-		for x in cols:
-			if water_grid[y][x]:
-				path_grid[y][x] = false
 
 	var tileset := OverworldTilesetFactory.build_tileset()
 	var ground := TileMapLayer.new()
@@ -71,50 +49,18 @@ func build_visuals(parent: Node2D, rng: RandomNumberGenerator = null) -> void:
 	ground.z_index = 0
 	parent.add_child(ground)
 
-	var water_layer := TileMapLayer.new()
-	water_layer.name = "WaterTiles"
-	water_layer.tile_set = tileset
-	water_layer.z_index = 1
-	parent.add_child(water_layer)
-
-	var props := TileMapLayer.new()
-	props.name = "PropTiles"
-	props.tile_set = tileset
-	props.z_index = 2
-	props.y_sort_enabled = true
-	parent.add_child(props)
-
+	# Full map: two grass colors in a checkerboard; no path/water/prop tiles.
 	for y in rows:
 		for x in cols:
-			var cell := Vector2i(x, y)
 			ground.set_cell(
-				cell,
+				Vector2i(x, y),
 				OverworldTilesetFactory.SOURCE_ID,
-				OverworldTilesetFactory.grass_atlas(_paint_rng)
+				OverworldTilesetFactory.grass_checker_atlas(x, y)
 			)
-			if path_grid[y][x]:
-				var pmask := OverworldTilesetFactory.neighbor_mask(path_grid, x, y, cols, rows)
-				ground.set_cell(
-					cell,
-					OverworldTilesetFactory.SOURCE_ID,
-					OverworldTilesetFactory.path_atlas(pmask)
-				)
-			if water_grid[y][x]:
-				var wmask := OverworldTilesetFactory.neighbor_mask(water_grid, x, y, cols, rows)
-				water_layer.set_cell(
-					cell,
-					OverworldTilesetFactory.SOURCE_ID,
-					OverworldTilesetFactory.water_atlas(wmask)
-				)
 
-	_scatter_props(props, walkable, path_grid, water_grid, cols, rows)
-
-	for i in rooms.size():
-		var room: Room = rooms[i]
+	for room in rooms:
 		if room.is_safe or room.is_boss:
 			_add_room_label(parent, room)
-			if room.is_safe:
-				_place_camp_props(props, room)
 
 
 func get_non_safe_rooms() -> Array[Room]:
@@ -290,189 +236,6 @@ func _is_far_enough(point: Vector2, avoid: Array[Vector2], min_sep: float) -> bo
 		if point.distance_squared_to(other) < min_sq:
 			return false
 	return true
-
-
-func _make_bool_grid(cols: int, rows: int, fill: bool) -> Array:
-	var grid: Array = []
-	grid.resize(rows)
-	for y in rows:
-		var row: Array = []
-		row.resize(cols)
-		for x in cols:
-			row[x] = fill
-		grid[y] = row
-	return grid
-
-
-func _mark_rect_cells(grid: Array, rect: Rect2, cols: int, rows: int, value: bool) -> void:
-	var x0 := clampi(int(floor(rect.position.x / float(TILE))), 0, cols - 1)
-	var y0 := clampi(int(floor(rect.position.y / float(TILE))), 0, rows - 1)
-	var x1 := clampi(int(ceil((rect.position.x + rect.size.x) / float(TILE))) - 1, 0, cols - 1)
-	var y1 := clampi(int(ceil((rect.position.y + rect.size.y) / float(TILE))) - 1, 0, rows - 1)
-	if x1 < x0 or y1 < y0:
-		return
-	for y in range(y0, y1 + 1):
-		for x in range(x0, x1 + 1):
-			grid[y][x] = value
-
-
-func _mark_room_paths(path_grid: Array, room: Room, cols: int, rows: int) -> void:
-	# Dirt clearing through room centers so corridors read as connected roads.
-	var c := room.center()
-	var cx := clampi(int(c.x / float(TILE)), 0, cols - 1)
-	var cy := clampi(int(c.y / float(TILE)), 0, rows - 1)
-	var half_w := maxi(1, int(room.rect.size.x / float(TILE * 4.0)))
-	var half_h := maxi(1, int(room.rect.size.y / float(TILE * 4.0)))
-	for y in range(maxi(0, cy - half_h), mini(rows, cy + half_h + 1)):
-		for x in range(maxi(0, cx - half_w), mini(cols, cx + half_w + 1)):
-			path_grid[y][x] = true
-	# Cross through room for readable path junctions.
-	var x0 := clampi(int(floor(room.rect.position.x / float(TILE))), 0, cols - 1)
-	var x1 := clampi(int(ceil((room.rect.end.x) / float(TILE))) - 1, 0, cols - 1)
-	var y0 := clampi(int(floor(room.rect.position.y / float(TILE))), 0, rows - 1)
-	var y1 := clampi(int(ceil((room.rect.end.y) / float(TILE))) - 1, 0, rows - 1)
-	for x in range(x0, x1 + 1):
-		path_grid[cy][x] = true
-	for y in range(y0, y1 + 1):
-		path_grid[y][cx] = true
-
-
-func _carve_river(water_grid: Array, path_grid: Array, cols: int, rows: int) -> void:
-	if cols < 4 or rows < 4:
-		return
-	# Meander from a random map edge toward the opposite side, avoiding safe-room core.
-	var start := Vector2i(_paint_rng.randi_range(1, cols - 2), 0)
-	if _paint_rng.randf() < 0.5:
-		start = Vector2i(0, _paint_rng.randi_range(1, rows - 2))
-	var target := Vector2i(cols - 1, _paint_rng.randi_range(1, rows - 2))
-	if start.x == 0:
-		target = Vector2i(cols - 1, _paint_rng.randi_range(1, rows - 2))
-	else:
-		target = Vector2i(_paint_rng.randi_range(1, cols - 2), rows - 1)
-
-	var avoid_center := Vector2i(cols / 2, rows / 2)
-	if safe_room != null:
-		var sc := safe_room.center()
-		avoid_center = Vector2i(int(sc.x / float(TILE)), int(sc.y / float(TILE)))
-
-	var cur := start
-	var guard := 0
-	while guard < cols * rows and cur != target:
-		guard += 1
-		_stamp_water(water_grid, path_grid, cur, cols, rows)
-		var step := Vector2i(
-			clampi(target.x - cur.x, -1, 1),
-			clampi(target.y - cur.y, -1, 1)
-		)
-		if _paint_rng.randf() < 0.35:
-			if _paint_rng.randf() < 0.5:
-				step.x = _paint_rng.randi_range(-1, 1)
-			else:
-				step.y = _paint_rng.randi_range(-1, 1)
-		var nxt := Vector2i(
-			clampi(cur.x + step.x, 0, cols - 1),
-			clampi(cur.y + step.y, 0, rows - 1)
-		)
-		# Soft avoidance of safe-room neighborhood.
-		if abs(nxt.x - avoid_center.x) <= 2 and abs(nxt.y - avoid_center.y) <= 2:
-			nxt = Vector2i(
-				clampi(cur.x + (1 if cur.x >= avoid_center.x else -1), 0, cols - 1),
-				clampi(cur.y + (1 if cur.y >= avoid_center.y else -1), 0, rows - 1)
-			)
-		if nxt == cur:
-			break
-		cur = nxt
-	_stamp_water(water_grid, path_grid, target, cols, rows)
-
-
-func _stamp_water(water_grid: Array, path_grid: Array, cell: Vector2i, cols: int, rows: int) -> void:
-	for dy in range(-1, 2):
-		for dx in range(-1, 2):
-			if abs(dx) + abs(dy) > 1 and _paint_rng.randf() > 0.35:
-				continue
-			var x := cell.x + dx
-			var y := cell.y + dy
-			if x < 0 or y < 0 or x >= cols or y >= rows:
-				continue
-			# Prefer carving beside roads rather than erasing whole roadbeds.
-			if path_grid[y][x] and (dx != 0 or dy != 0) and _paint_rng.randf() < 0.7:
-				continue
-			water_grid[y][x] = true
-
-
-func _scatter_props(
-	props: TileMapLayer,
-	walkable: Array,
-	path_grid: Array,
-	water_grid: Array,
-	cols: int,
-	rows: int
-) -> void:
-	for y in rows:
-		for x in cols:
-			if path_grid[y][x] or water_grid[y][x]:
-				continue
-			var cell := Vector2i(x, y)
-			var edge := x <= 1 or y <= 1 or x >= cols - 2 or y >= rows - 2
-			var roll := _paint_rng.randf()
-			if edge and roll < 0.55:
-				props.set_cell(
-					cell,
-					OverworldTilesetFactory.SOURCE_ID,
-					OverworldTilesetFactory.scatter_prop(_paint_rng, "tree")
-				)
-			elif not walkable[y][x] and roll < 0.4:
-				props.set_cell(
-					cell,
-					OverworldTilesetFactory.SOURCE_ID,
-					OverworldTilesetFactory.scatter_prop(_paint_rng, "tree")
-				)
-			elif roll < 0.06:
-				props.set_cell(
-					cell,
-					OverworldTilesetFactory.SOURCE_ID,
-					OverworldTilesetFactory.scatter_prop(_paint_rng, "bush")
-				)
-			elif roll < 0.09:
-				props.set_cell(
-					cell,
-					OverworldTilesetFactory.SOURCE_ID,
-					OverworldTilesetFactory.scatter_prop(_paint_rng, "rock")
-				)
-			elif roll < 0.13:
-				props.set_cell(
-					cell,
-					OverworldTilesetFactory.SOURCE_ID,
-					OverworldTilesetFactory.scatter_prop(_paint_rng, "tuft")
-				)
-			elif roll < 0.145:
-				var deco := "stump" if _paint_rng.randf() < 0.5 else "log"
-				props.set_cell(
-					cell,
-					OverworldTilesetFactory.SOURCE_ID,
-					OverworldTilesetFactory.scatter_prop(_paint_rng, deco)
-				)
-
-
-func _place_camp_props(props: TileMapLayer, room: Room) -> void:
-	var c := room.center()
-	var cx := int(c.x / float(TILE))
-	var cy := int(c.y / float(TILE))
-	var placements: Array = [
-		[Vector2i(cx - 1, cy - 1), "tent"],
-		[Vector2i(cx + 1, cy - 1), "campfire"],
-		[Vector2i(cx, cy + 1), "chest"],
-		[Vector2i(cx - 2, cy), "bush"],
-		[Vector2i(cx + 2, cy), "rock"],
-	]
-	for item in placements:
-		var cell: Vector2i = item[0]
-		var kind: String = item[1]
-		props.set_cell(
-			cell,
-			OverworldTilesetFactory.SOURCE_ID,
-			OverworldTilesetFactory.scatter_prop(_paint_rng, kind)
-		)
 
 
 func _add_room_label(parent: Node2D, room: Room) -> void:
