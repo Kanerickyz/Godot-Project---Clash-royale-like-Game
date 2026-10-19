@@ -15,6 +15,10 @@ const BIT_E := 2
 const BIT_S := 4
 const BIT_W := 8
 
+## Checkerboard pair: warm yellow-green vs cooler olive (atlas row 0).
+const GRASS_A := Vector2i(0, 0)
+const GRASS_B := Vector2i(2, 0)
+
 static var _grass_coords: Array[Vector2i] = [
 	Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0),
 	Vector2i(4, 0), Vector2i(5, 0), Vector2i(6, 0), Vector2i(7, 0),
@@ -66,8 +70,12 @@ static func build_tileset() -> TileSet:
 
 static func grass_atlas(rng: RandomNumberGenerator) -> Vector2i:
 	if _grass_coords.is_empty():
-		return Vector2i(0, 0)
+		return GRASS_A
 	return _grass_coords[rng.randi() % _grass_coords.size()]
+
+
+static func grass_checker_atlas(x: int, y: int) -> Vector2i:
+	return GRASS_A if ((x + y) & 1) == 0 else GRASS_B
 
 
 static func path_atlas(mask: int) -> Vector2i:
