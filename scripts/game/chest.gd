@@ -1,9 +1,11 @@
 class_name RoamChest
 extends StaticBody2D
-## Attackable chest with HP; opens a three-pick recruit UI when destroyed.
+## Attackable chest with HP; Phase A opens with a placeholder reward (no recruit three-pick).
 
 
 signal opened(chest: RoamChest, choices: Array)
+## Phase A: smash reward without binding the old recruit contract.
+signal smashed(chest: RoamChest, placeholder_gold: int)
 
 @export var max_hp: int = 60
 
@@ -49,6 +51,9 @@ func _open() -> void:
 	if is_dead:
 		return
 	is_dead = true
+	# Keep `opened` for legacy listeners; Phase A uses `smashed` placeholder gold.
+	var placeholder_gold := 3
+	smashed.emit(self, placeholder_gold)
 	opened.emit(self, choices.duplicate())
 	hide()
 	collision_layer = 0

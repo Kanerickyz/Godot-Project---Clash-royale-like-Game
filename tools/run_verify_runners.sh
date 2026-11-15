@@ -10,6 +10,7 @@ cd "$ROOT"
 
 runners=(
   "res://scripts/core/project_load_smoke_test_runner.gd"
+  "res://scripts/core/phase_a_floor_loop_test_runner.gd"
 )
 
 failed=0

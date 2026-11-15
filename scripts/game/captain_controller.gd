@@ -1,10 +1,11 @@
 class_name CaptainController
 extends Node
-## Keeps a Camera2D locked onto the captain.
+## Keeps a Camera2D locked onto the captain (presentation follow only).
 
 
 @export var camera: Camera2D
-@export var follow_lerp: float = 8.0
+## Higher = snappier follow. Softened slightly so HUD/threat readout stays readable while moving.
+@export var follow_lerp: float = 6.5
 
 var captain: Node2D
 

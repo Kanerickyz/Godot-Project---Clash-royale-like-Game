@@ -6,7 +6,7 @@
 [resource]
 script = ExtResource("1_script")
 id = &"captain"
-display_name = "队长"
+display_name = "指挥官"
 max_hp = 100
 attack_damage = 10
 attack_interval = 0.7
