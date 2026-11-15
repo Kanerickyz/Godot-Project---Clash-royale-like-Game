@@ -14,6 +14,7 @@ signal shrine_interact_pressed
 signal shop_closed
 signal chest_pick_pressed(choice_index: int)
 signal restart_pressed
+signal main_menu_pressed
 signal assemble_pressed
 signal rage_pressed
 signal portal_confirm_pressed
@@ -61,6 +62,7 @@ var _shrine_panel: PanelContainer
 var _shrine_title: Label
 var _end_panel: PanelContainer
 var _end_label: Label
+var _end_stats_label: Label
 var _interstitial_panel: PanelContainer
 var _interstitial_label: Label
 var _cmd_row: HBoxContainer
@@ -117,9 +119,18 @@ func refresh_threat(multiplier: float, tier_label: String, tier_index: int) -> v
 		_threat_bar.modulate = Color(1, 1, 1, 1)
 
 
-func refresh_floor(floor_index: int) -> void:
-	if _floor_label != null:
-		_floor_label.text = "第 %d 层" % maxi(1, floor_index)
+func refresh_floor(floor_index: int, total_floors: int = 0, dungeon_label: String = "") -> void:
+	if _floor_label == null:
+		return
+	var fi := maxi(1, floor_index)
+	var text := "第 %d 层" % fi
+	if total_floors > 0:
+		text = "第 %d/%d 层" % [fi, total_floors]
+		if total_floors > 0 and fi >= total_floors:
+			text += " · 终局"
+	if not dungeon_label.is_empty():
+		text += " · %s" % dungeon_label
+	_floor_label.text = text
 
 
 func set_command_cooldowns(
@@ -293,17 +304,40 @@ func hide_chest_pick() -> void:
 		_chest_panel.visible = false
 
 
-func show_end(won: bool) -> void:
+func show_end(won: bool, stats: Dictionary = {}) -> void:
 	if _end_label != null:
-		_end_label.text = "胜利（占位）" if won else "失败…指挥官阵亡"
+		_end_label.text = "胜利！终局 Boss 已击败" if won else "失败…指挥官阵亡"
+		_end_label.add_theme_color_override(
+			"font_color",
+			Color(0.95, 0.86, 0.45, 1.0) if won else Color(1.0, 0.55, 0.5, 1.0)
+		)
+	if _end_stats_label != null:
+		var floors_reached := int(stats.get("floors_reached", stats.get("floor_index", 1)))
+		var total := int(stats.get("total_floors", 0))
+		var ducats := int(stats.get("ducats", 0))
+		var corpus_amt := int(stats.get("corpus", 0))
+		var dungeon := str(stats.get("dungeon_label", ""))
+		var floor_line := "层数：%d" % floors_reached
+		if total > 0:
+			floor_line = "层数：%d / %d" % [floors_reached, total]
+		var lines: PackedStringArray = PackedStringArray([
+			floor_line,
+			"达克特：%d" % ducats,
+			"尸骸：%d" % corpus_amt,
+		])
+		if not dungeon.is_empty():
+			lines.append("地城：%s" % dungeon)
+		_end_stats_label.text = "\n".join(lines)
 	if _end_panel != null:
 		_end_panel.visible = true
 	hide_shop()
 	hide_chest_pick()
 	hide_interstitial()
+	hide_shrine_choice()
 	if _cmd_row != null:
 		_cmd_row.visible = false
 	set_portal_prompt_visible(false)
+	set_shrine_prompt_visible(false)
 
 
 func set_world_hint(text: String) -> void:
@@ -968,21 +1002,33 @@ func _build_ui() -> void:
 	next_btn.pressed.connect(func() -> void: next_floor_pressed.emit())
 	inter_v.add_child(next_btn)
 
-	_end_panel = _make_centered_panel(Vector2(300, 180))
+	_end_panel = _make_centered_panel(Vector2(340, 280))
 	_end_panel.visible = false
 	_root.add_child(_end_panel)
 	var end_v := VBoxContainer.new()
+	end_v.add_theme_constant_override("separation", 10)
 	_end_panel.add_child(end_v)
 	_end_label = Label.new()
 	_end_label.add_theme_font_size_override("font_size", 24)
 	_end_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_end_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	end_v.add_child(_end_label)
+	_end_stats_label = Label.new()
+	_end_stats_label.add_theme_font_size_override("font_size", 15)
+	_end_stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_end_stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_end_stats_label.add_theme_color_override("font_color", Color(0.82, 0.86, 0.92, 1.0))
+	end_v.add_child(_end_stats_label)
 	var restart := Button.new()
-	restart.text = "重新开始"
+	restart.text = "再开一局"
 	restart.custom_minimum_size = Vector2(0, 48)
 	restart.pressed.connect(func() -> void: restart_pressed.emit())
 	end_v.add_child(restart)
+	var menu_btn := Button.new()
+	menu_btn.text = "回主菜单"
+	menu_btn.custom_minimum_size = Vector2(0, 44)
+	menu_btn.pressed.connect(func() -> void: main_menu_pressed.emit())
+	end_v.add_child(menu_btn)
 
 
 func _make_centered_panel(min_size: Vector2) -> PanelContainer:

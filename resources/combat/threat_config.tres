@@ -5,9 +5,9 @@
 [resource]
 script = ExtResource("1_script")
 base_multiplier = 1.0
-max_multiplier = 2.5
-ramp_duration = 120.0
-tier_thresholds = PackedFloat32Array(1, 1.25, 1.6, 2)
+max_multiplier = 2.75
+ramp_duration = 100.0
+tier_thresholds = PackedFloat32Array(1, 1.25, 1.6, 2.1)
 tier_labels = PackedStringArray("平静", "警惕", "高压", "淹没")
-interval_threat_weight = 1.0
-enemy_stat_threat_weight = 1.0
+interval_threat_weight = 1.05
+enemy_stat_threat_weight = 1.1

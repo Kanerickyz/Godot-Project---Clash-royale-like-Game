@@ -1,9 +1,10 @@
 class_name GameController
 extends Node2D
-## Phase E: corpus + relics shop + floor loot (chest/shrine/elite); builds on A–D.
+## Phase F: multi-floor run + final boss win/lose settlement; builds on A–E.
 
 
 enum RunPhase { FLOOR, INTERSTITIAL, GAME_OVER }
+enum RunOutcome { NONE, VICTORY, DEFEAT }
 
 const CHEST_ENGAGE_RADIUS := 110.0
 const PATH_SPAWN_CFG := "res://resources/world/world_spawn.tres"
@@ -21,7 +22,10 @@ var corpus: int = 0
 var game_over: bool = false
 var ui_blocking: bool = false
 var run_phase: RunPhase = RunPhase.FLOOR
+var run_outcome: RunOutcome = RunOutcome.NONE
 var floor_index: int = 1
+var dungeon_type_id: String = "crypt"
+var dungeon_type_label: String = "地下墓穴"
 
 ## Test/harness: when non-zero, overrides keyboard/joystick move input.
 var forced_move_vector: Vector2 = Vector2.ZERO
@@ -48,6 +52,7 @@ var _hud: GameHud
 var _followers: Array[SquadMember] = []
 var _focused_chest: RoamChest
 var _focused_shrine: FloorShrine
+var _final_boss: Boss
 var _respawn_timer: float = 0.0
 var _next_respawn_interval: float = 30.0
 var _enemy_serial: int = 0
@@ -60,6 +65,7 @@ var _shop_status: String = ""
 var _relic_status: String = ""
 var _last_merge_log: String = ""
 var _merge_rebuild_guard: bool = false
+var _base_threat_ramp: float = 120.0
 
 var _assemble_cd: float = 0.0
 var _assemble_active_left: float = 0.0
@@ -91,6 +97,7 @@ func _ready() -> void:
 	_hud.refresh_gold(gold)
 	_hud.refresh_corpus(corpus)
 	_hud.restart_pressed.connect(_on_restart)
+	_hud.main_menu_pressed.connect(_on_main_menu)
 	_hud.assemble_pressed.connect(_on_assemble_pressed)
 	_hud.rage_pressed.connect(_on_rage_pressed)
 	_hud.portal_confirm_pressed.connect(_on_portal_confirm_pressed)
@@ -146,6 +153,44 @@ func get_floor_index() -> int:
 	return floor_index
 
 
+func get_total_floors() -> int:
+	return _floor_cfg.resolved_total_floors() if _floor_cfg != null else 3
+
+
+func is_final_floor() -> bool:
+	return _floor_cfg != null and _floor_cfg.is_final_floor_index(floor_index)
+
+
+func get_run_outcome() -> RunOutcome:
+	return run_outcome
+
+
+func get_dungeon_type_id() -> String:
+	return dungeon_type_id
+
+
+func get_dungeon_type_label() -> String:
+	return dungeon_type_label
+
+
+func get_final_boss() -> Boss:
+	return _final_boss
+
+
+func get_run_stats() -> Dictionary:
+	return {
+		"floors_reached": floor_index,
+		"floor_index": floor_index,
+		"total_floors": get_total_floors(),
+		"ducats": gold,
+		"corpus": corpus,
+		"dungeon_id": dungeon_type_id,
+		"dungeon_label": dungeon_type_label,
+		"outcome": run_outcome,
+		"won": run_outcome == RunOutcome.VICTORY,
+	}
+
+
 func get_threat_multiplier() -> float:
 	return _threat.get_multiplier()
 
@@ -166,7 +211,7 @@ func debug_advance_threat(seconds: float) -> void:
 
 ## Test helper: enter portal as if confirmed near it.
 func debug_enter_portal() -> void:
-	if run_phase != RunPhase.FLOOR or game_over:
+	if run_phase != RunPhase.FLOOR or game_over or is_final_floor():
 		return
 	_enter_interstitial()
 
@@ -176,6 +221,35 @@ func debug_advance_floor() -> void:
 	if run_phase != RunPhase.INTERSTITIAL or game_over:
 		return
 	_begin_next_floor()
+
+
+## Test helper: walk portal → next until final floor (or stop early).
+func debug_goto_final_floor() -> void:
+	var guard := 16
+	while not is_final_floor() and guard > 0 and not game_over:
+		guard -= 1
+		if run_phase == RunPhase.FLOOR:
+			debug_enter_portal()
+		if run_phase == RunPhase.INTERSTITIAL:
+			debug_advance_floor()
+
+
+## Test helper: deal lethal damage to the final boss if present.
+func debug_kill_final_boss() -> bool:
+	if _final_boss == null or not is_instance_valid(_final_boss) or _final_boss.is_dead:
+		return false
+	_final_boss.take_damage(_final_boss.current_hp + 9999)
+	return true
+
+
+## Test helper: wipe living followers then lethal damage on captain → defeat.
+func debug_force_defeat() -> void:
+	if game_over:
+		return
+	while get_follower_count() > 0:
+		debug_kill_follower(0)
+	if _captain != null and is_instance_valid(_captain) and not _captain.is_dead:
+		_captain.take_damage(_captain.current_hp + 9999)
 
 
 func get_ducats() -> int:
@@ -627,6 +701,9 @@ func _try_portal_confirm(from_input: bool) -> void:
 func _enter_interstitial() -> void:
 	if run_phase != RunPhase.FLOOR or game_over:
 		return
+	# Final floor has no layer-exit portal; win only by defeating the boss.
+	if is_final_floor():
+		return
 	run_phase = RunPhase.INTERSTITIAL
 	ui_blocking = true
 	_set_combat_enabled(false)
@@ -660,7 +737,10 @@ func _on_next_floor_pressed() -> void:
 func _begin_next_floor() -> void:
 	if run_phase != RunPhase.INTERSTITIAL or game_over:
 		return
-	floor_index += 1
+	var next_index := floor_index + 1
+	if next_index > get_total_floors():
+		return
+	floor_index = next_index
 	if _hud != null:
 		_hud.hide_interstitial()
 	_start_floor(false)
@@ -668,8 +748,12 @@ func _begin_next_floor() -> void:
 
 func _start_floor(is_run_start: bool) -> void:
 	run_phase = RunPhase.FLOOR
-	game_over = false
+	if is_run_start:
+		run_outcome = RunOutcome.NONE
+		game_over = false
 	ui_blocking = false
+	_resolve_dungeon_type()
+	_apply_floor_threat_pressure()
 	_threat.reset()
 	_respawn_timer = 0.0
 	_assemble_cd = 0.0
@@ -682,6 +766,7 @@ func _start_floor(is_run_start: bool) -> void:
 	_shrine_buff_left = 0.0
 	_shrine_choice_open = false
 	_focused_shrine = null
+	_final_boss = null
 	_clear_floor_entities(is_run_start)
 	_generate_map()
 	if is_run_start:
@@ -695,15 +780,18 @@ func _start_floor(is_run_start: bool) -> void:
 	_spawn_enemies_initial()
 	_spawn_chests_initial()
 	_spawn_shrines_initial()
-	_spawn_portal()
+	if is_final_floor():
+		_spawn_final_boss()
+	else:
+		_spawn_portal()
 	_roll_next_respawn_interval()
 	_set_combat_enabled(true)
 	_refresh_threat_hud()
 	_refresh_temp_damage_mults()
 	_refresh_oaths()
 	_refresh_relic_hud()
+	_refresh_floor_hud()
 	if _hud != null:
-		_hud.refresh_floor(floor_index)
 		_hud.refresh_corpus(corpus)
 		_hud.hide_interstitial()
 		_hud.hide_shrine_choice()
@@ -738,6 +826,7 @@ func _clear_floor_entities(clear_army: bool) -> void:
 		_entities.remove_child(child)
 		child.free()
 	_portal = null
+	_final_boss = null
 	_focused_chest = null
 	_focused_shrine = null
 	if clear_army:
@@ -779,12 +868,39 @@ func _generate_map() -> void:
 			child.free()
 	_map = RoguelikeMapGenerator.new()
 	_map.generate(_spawn_cfg, _rng)
-	_map.build_visuals(_ground_host, _rng)
+	_map.build_visuals(_ground_host, _rng, dungeon_type_id, is_final_floor())
 	if _camera != null:
 		_camera.limit_left = 0
 		_camera.limit_top = 0
 		_camera.limit_right = int(_map.map_size.x)
 		_camera.limit_bottom = int(_map.map_size.y)
+
+
+func _resolve_dungeon_type() -> void:
+	if _floor_cfg == null:
+		dungeon_type_id = "crypt"
+		dungeon_type_label = "地下墓穴"
+		return
+	dungeon_type_id = _floor_cfg.dungeon_type_id_for_floor(floor_index)
+	dungeon_type_label = _floor_cfg.dungeon_type_label_for_floor(floor_index)
+
+
+func _apply_floor_threat_pressure() -> void:
+	# Restore base ramp, then scale on final floor for "能通可败" pressure.
+	var cfg := _threat.config if _threat != null else null
+	if cfg == null:
+		return
+	if _base_threat_ramp <= 0.0:
+		_base_threat_ramp = cfg.ramp_duration
+	cfg.ramp_duration = _base_threat_ramp
+	if is_final_floor() and _floor_cfg != null:
+		cfg.ramp_duration = maxf(20.0, _base_threat_ramp * _floor_cfg.final_floor_threat_ramp_scale)
+
+
+func _refresh_floor_hud() -> void:
+	if _hud == null:
+		return
+	_hud.refresh_floor(floor_index, get_total_floors(), dungeon_type_label)
 
 
 func _spawn_captain() -> void:
@@ -832,6 +948,8 @@ func _reposition_army_to_safe() -> void:
 
 
 func _spawn_portal() -> void:
+	if is_final_floor():
+		return
 	_portal = FloorPortal.new()
 	_portal.name = "FloorPortal"
 	var radius := _floor_cfg.portal_interact_radius if _floor_cfg != null else 90.0
@@ -842,6 +960,41 @@ func _spawn_portal() -> void:
 	_portal.global_position = portal_pos
 	_occupied_spots.append(portal_pos)
 	_entities.add_child(_portal)
+
+
+func _spawn_final_boss() -> void:
+	if _entities == null or _map == null:
+		return
+	var path := _floor_cfg.final_boss_path if _floor_cfg != null else "res://resources/units/boss.tres"
+	var def := _load_unit(path)
+	var boss := Boss.new()
+	boss.name = "FinalBoss"
+	var behavior_path := (
+		_floor_cfg.final_boss_behavior_path
+		if _floor_cfg != null
+		else "res://resources/combat/boss_summon_charge.tres"
+	)
+	var minion_path := (
+		_floor_cfg.final_boss_minion_path
+		if _floor_cfg != null
+		else "res://resources/units/boss_minion.tres"
+	)
+	var behavior_res := load(behavior_path)
+	var behavior: BossBehaviorConfig = null
+	if behavior_res is BossBehaviorConfig:
+		behavior = (behavior_res as BossBehaviorConfig).duplicate(true) as BossBehaviorConfig
+	var minion_def := _load_unit(minion_path)
+	if behavior != null:
+		boss.configure_behavior(behavior, minion_def)
+	boss.configure(def, _rng, false)
+	var at := _map.boss_room.center() if _map.boss_room != null else Vector2(1400, 1000)
+	boss.global_position = at
+	_occupied_spots.append(at)
+	boss.gold_dropped.connect(_on_gold_dropped)
+	boss.corpus_dropped.connect(_on_corpus_dropped)
+	boss.boss_defeated.connect(_on_final_boss_defeated)
+	_entities.add_child(boss)
+	_final_boss = boss
 
 
 func _spawn_shrines_initial() -> void:
@@ -878,6 +1031,15 @@ func _sample_loot_spawn_pos() -> Vector2:
 
 func _spawn_enemies_initial() -> void:
 	var count := _rng.randi_range(_spawn_cfg.start_enemy_min, _spawn_cfg.start_enemy_max)
+	# Late floors add pressure; final floor keeps some trash but less than a full clear.
+	if _floor_cfg != null and floor_index > 1:
+		var bonus := _floor_cfg.late_floor_enemy_bonus
+		if is_final_floor():
+			bonus = maxi(0, bonus - 1)
+		count += bonus * (floor_index - 1)
+	if is_final_floor():
+		# Leave room for the boss encounter.
+		count = mini(count, _spawn_cfg.start_enemy_min + 2)
 	var elite_n := 1 if _corpus_cfg == null else maxi(0, _corpus_cfg.start_elite_count)
 	elite_n = mini(elite_n, count)
 	var grunt_n := maxi(0, count - elite_n)
@@ -1815,18 +1977,38 @@ func _on_corpus_collected(amount: int) -> void:
 		_hud.refresh_corpus(corpus)
 
 
+func _on_final_boss_defeated(_boss: Boss) -> void:
+	if game_over or run_outcome != RunOutcome.NONE:
+		return
+	_end_run(RunOutcome.VICTORY)
+
+
 func _on_captain_died(_who: Combatant) -> void:
+	if game_over or run_outcome != RunOutcome.NONE:
+		return
+	_end_run(RunOutcome.DEFEAT)
+
+
+func _end_run(outcome: RunOutcome) -> void:
 	if game_over:
 		return
+	run_outcome = outcome
 	game_over = true
 	run_phase = RunPhase.GAME_OVER
 	ui_blocking = true
 	_set_combat_enabled(false)
+	_portal_holding = false
+	_shrine_choice_open = false
 	if _hud != null:
-		_hud.show_end(false)
+		_hud.show_end(outcome == RunOutcome.VICTORY, get_run_stats())
 
 
 func _on_restart() -> void:
+	get_tree().reload_current_scene()
+
+
+func _on_main_menu() -> void:
+	# Single-scene prototype: reload main entry (presentation hook for a future menu).
 	get_tree().reload_current_scene()
 
 
@@ -1865,9 +2047,13 @@ func _load_floor_run_config() -> FloorRunConfig:
 func _load_threat_config() -> ThreatConfig:
 	var res := load(PATH_THREAT)
 	if res is ThreatConfig:
-		return (res as ThreatConfig).duplicate(true) as ThreatConfig
+		var cfg := (res as ThreatConfig).duplicate(true) as ThreatConfig
+		_base_threat_ramp = cfg.ramp_duration
+		return cfg
 	push_error("GameController: failed to load ThreatConfig %s" % PATH_THREAT)
-	return ThreatConfig.new()
+	var fallback := ThreatConfig.new()
+	_base_threat_ramp = fallback.ramp_duration
+	return fallback
 
 
 func _load_shop_economy() -> ShopEconomyConfig:

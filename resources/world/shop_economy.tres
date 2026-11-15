@@ -4,12 +4,12 @@
 
 [resource]
 script = ExtResource("1_script")
-starting_ducats = 20
-chest_ducats = 8
+starting_ducats = 18
+chest_ducats = 7
 interest_gold_per_point = 10
 interest_max = 5
 shelf_slot_count = 3
-refresh_cost = 2
+refresh_cost = 3
 max_unit_types = 6
 sell_refund_ratio = 0.5
 rarity_prices = PackedInt32Array(3, 5, 8)
