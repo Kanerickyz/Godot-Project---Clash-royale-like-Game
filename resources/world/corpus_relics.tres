@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="CorpusRelicsConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/corpus_relics_config.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+starting_corpus = 0
+kill_corpus_min = 1
+kill_corpus_max = 2
+chest_corpus_min = 2
+chest_corpus_max = 4
+chest_corpus_chance = 0.85
+start_elite_count = 1
+elite_corpus_min = 4
+elite_corpus_max = 7
+elite_ducat_multiplier = 2.0
+elite_hp_multiplier = 2.2
+elite_damage_multiplier = 1.4
+start_shrine_count = 1
+shrine_interact_radius = 90.0
+shrine_corpus_reward = 3
+shrine_buff_duration_sec = 12.0
+shrine_attack_bonus = 0.25
+max_relic_slots = 3
+relic_shelf_slot_count = 3
+relic_refresh_cost = 2
+relic_pool_paths = PackedStringArray("res://resources/relics/relic_bone_hourglass.tres", "res://resources/relics/relic_iron_shard.tres", "res://resources/relics/relic_greed_tooth.tres")

@@ -1,12 +1,16 @@
 class_name GameHud
 extends CanvasLayer
-## Phase D HUD: threat/ducats/shop + revive + oath progress + rank-aware army.
+## Phase E HUD: dual currency + relic bar/shop + shrine choice; keeps A–D panels.
 
 
 signal shop_buy_pressed(slot_index: int)
 signal shop_refresh_pressed
 signal shop_upgrade_pressed
 signal shop_sell_pressed(follower_index: int)
+signal relic_buy_pressed(slot_index: int)
+signal relic_refresh_pressed
+signal shrine_choice_pressed(choice_index: int)
+signal shrine_interact_pressed
 signal shop_closed
 signal chest_pick_pressed(choice_index: int)
 signal restart_pressed
@@ -20,9 +24,11 @@ const THREAT_BAR_MIN := 1.0
 const THREAT_BAR_MAX := 2.5
 
 var gold: int = 0
+var corpus: int = 0
 
 var _root: Control
 var _gold_label: Label
+var _corpus_label: Label
 var _threat_label: Label
 var _threat_bar: ProgressBar
 var _threat_bar_fill: StyleBoxFlat
@@ -34,6 +40,9 @@ var _revive_list: VBoxContainer
 var _oath_panel: PanelContainer
 var _oath_title: Label
 var _oath_list: VBoxContainer
+var _relic_panel: PanelContainer
+var _relic_title: Label
+var _relic_list: VBoxContainer
 var _shop_panel: PanelContainer
 var _shop_title: Label
 var _shop_status: Label
@@ -42,8 +51,14 @@ var _shop_army_list: VBoxContainer
 var _shop_refresh_btn: Button
 var _shop_upgrade_btn: Button
 var _shop_next_btn: Button
+var _relic_shop_status: Label
+var _relic_shop_list: VBoxContainer
+var _relic_refresh_btn: Button
+var _owned_relic_list: VBoxContainer
 var _chest_panel: PanelContainer
 var _chest_list: HBoxContainer
+var _shrine_panel: PanelContainer
+var _shrine_title: Label
 var _end_panel: PanelContainer
 var _end_label: Label
 var _interstitial_panel: PanelContainer
@@ -52,6 +67,7 @@ var _cmd_row: HBoxContainer
 var _assemble_btn: Button
 var _rage_btn: Button
 var _portal_btn: Button
+var _shrine_btn: Button
 var _joystick: VirtualJoystick
 
 
@@ -59,10 +75,12 @@ func _ready() -> void:
 	layer = 20
 	_build_ui()
 	refresh_gold(gold)
+	refresh_corpus(corpus)
 	refresh_threat(1.0, "平静", 0)
 	refresh_floor(1)
 	set_command_cooldowns(0.0, 0.0, 0.0, 0.0)
 	set_portal_prompt_visible(false)
+	set_shrine_prompt_visible(false)
 
 
 func get_joystick_vector() -> Vector2:
@@ -75,6 +93,12 @@ func refresh_gold(amount: int) -> void:
 	gold = amount
 	if _gold_label != null:
 		_gold_label.text = "达克特: %d" % gold
+
+
+func refresh_corpus(amount: int) -> void:
+	corpus = amount
+	if _corpus_label != null:
+		_corpus_label.text = "尸骸: %d" % corpus
 
 
 func refresh_threat(multiplier: float, tier_label: String, tier_index: int) -> void:
@@ -128,6 +152,11 @@ func set_portal_prompt_visible(visible_on: bool) -> void:
 		_portal_btn.visible = visible_on
 
 
+func set_shrine_prompt_visible(visible_on: bool) -> void:
+	if _shrine_btn != null:
+		_shrine_btn.visible = visible_on
+
+
 func show_interstitial(floor_cleared: int) -> void:
 	# Legacy stub path: prefer show_shop_interstitial from GameController.
 	if _interstitial_label != null:
@@ -156,27 +185,40 @@ func show_shop_interstitial(
 	army_rows: Array,
 	type_count: int,
 	type_cap: int,
-	status_text: String = ""
+	status_text: String = "",
+	current_corpus: int = 0,
+	relic_shelf: Array = [],
+	relic_refresh_cost: int = 2,
+	owned_relics: Array = [],
+	relic_max_slots: int = 3,
+	relic_status_text: String = ""
 ) -> void:
 	refresh_gold(current_gold)
+	refresh_corpus(current_corpus)
+	refresh_relics(owned_relics, relic_max_slots)
 	if _interstitial_panel != null:
 		_interstitial_panel.visible = false
 	if _chest_panel != null:
 		_chest_panel.visible = false
+	if _shrine_panel != null:
+		_shrine_panel.visible = false
 	if _end_panel != null:
 		_end_panel.visible = false
 	if _cmd_row != null:
 		_cmd_row.visible = false
 	set_portal_prompt_visible(false)
+	set_shrine_prompt_visible(false)
 	if _shop_title != null:
 		var interest_line := ""
 		if interest_gained > 0:
 			interest_line = " · 利息 +%d" % interest_gained
 		elif interest_gained == 0:
 			interest_line = " · 利息 +0"
-		_shop_title.text = "第 %d 层后 · 招兵店%s" % [floor_cleared, interest_line]
+		_shop_title.text = "第 %d 层后 · 招兵/遗物%s" % [floor_cleared, interest_line]
 	_rebuild_shop_shelf(shelf, current_gold)
 	_rebuild_shop_army(army_rows)
+	_rebuild_relic_shelf(relic_shelf, current_corpus, owned_relics.size(), relic_max_slots)
+	_rebuild_owned_relics(owned_relics, relic_max_slots)
 	if _shop_refresh_btn != null:
 		_shop_refresh_btn.text = "刷新 (-%d)" % maxi(0, refresh_cost)
 		_shop_refresh_btn.disabled = current_gold < refresh_cost
@@ -187,11 +229,21 @@ func show_shop_interstitial(
 		else:
 			_shop_upgrade_btn.text = "招募等级 Lv%d → (-%d)" % [recruit_level, upgrade_cost]
 			_shop_upgrade_btn.disabled = current_gold < upgrade_cost
+	if _relic_refresh_btn != null:
+		_relic_refresh_btn.text = "刷新遗物 (-%d尸骸)" % maxi(0, relic_refresh_cost)
+		_relic_refresh_btn.disabled = current_corpus < relic_refresh_cost
 	if _shop_status != null:
-		var base := "种类 %d/%d" % [type_count, type_cap]
+		var base := "种类 %d/%d · 达克特 %d · 尸骸 %d" % [
+			type_count, type_cap, current_gold, current_corpus,
+		]
 		if status_text != "":
 			base = "%s · %s" % [base, status_text]
 		_shop_status.text = base
+	if _relic_shop_status != null:
+		var rbase := "遗物槽 %d/%d" % [owned_relics.size(), relic_max_slots]
+		if relic_status_text != "":
+			rbase = "%s · %s" % [rbase, relic_status_text]
+		_relic_shop_status.text = rbase
 	if _shop_panel != null:
 		_shop_panel.visible = true
 
@@ -201,6 +253,8 @@ func hide_interstitial() -> void:
 		_interstitial_panel.visible = false
 	if _shop_panel != null:
 		_shop_panel.visible = false
+	if _shrine_panel != null:
+		_shrine_panel.visible = false
 	if _cmd_row != null:
 		_cmd_row.visible = true
 
@@ -294,6 +348,56 @@ func refresh_revive_queue(rows: Array) -> void:
 		lbl.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.1, 0.85))
 		lbl.add_theme_constant_override("outline_size", 2)
 		_revive_list.add_child(lbl)
+
+
+func refresh_relics(rows: Array, max_slots: int = 3) -> void:
+	if _relic_list == null:
+		return
+	for child in _relic_list.get_children():
+		_relic_list.remove_child(child)
+		child.queue_free()
+	if _relic_panel != null:
+		_relic_panel.visible = true
+	if _relic_title != null:
+		_relic_title.text = "遗物 (%d/%d)" % [rows.size(), maxi(1, max_slots)]
+	if rows.is_empty():
+		var empty := Label.new()
+		empty.text = "（空）"
+		empty.add_theme_font_size_override("font_size", 12)
+		_relic_list.add_child(empty)
+		return
+	for row_data in rows:
+		var info: Dictionary = row_data
+		var name_str := str(info.get("name", "?"))
+		var desc := str(info.get("description", ""))
+		var line := name_str if desc == "" else "%s · %s" % [name_str, desc]
+		var lbl := Label.new()
+		lbl.text = line
+		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		lbl.add_theme_font_size_override("font_size", 12)
+		lbl.add_theme_color_override("font_color", Color(0.88, 0.82, 0.95, 1.0))
+		lbl.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.1, 0.85))
+		lbl.add_theme_constant_override("outline_size", 2)
+		_relic_list.add_child(lbl)
+
+
+func show_shrine_choice(title_text: String = "神龛") -> void:
+	if _shrine_title != null:
+		_shrine_title.text = title_text
+	if _shrine_panel != null:
+		_shrine_panel.visible = true
+	if _cmd_row != null:
+		_cmd_row.visible = false
+	set_shrine_prompt_visible(false)
+
+
+func hide_shrine_choice() -> void:
+	if _shrine_panel != null:
+		_shrine_panel.visible = false
+	if _cmd_row != null and (_shop_panel == null or not _shop_panel.visible) and (
+		_end_panel == null or not _end_panel.visible
+	):
+		_cmd_row.visible = true
 
 
 func refresh_oaths(rows: Array) -> void:
@@ -425,6 +529,81 @@ func _rebuild_shop_army(army_rows: Array) -> void:
 		_shop_army_list.add_child(row)
 
 
+func _rebuild_relic_shelf(
+	shelf: Array,
+	current_corpus: int,
+	owned_count: int,
+	max_slots: int
+) -> void:
+	if _relic_shop_list == null:
+		return
+	for child in _relic_shop_list.get_children():
+		_relic_shop_list.remove_child(child)
+		child.queue_free()
+	if shelf.is_empty():
+		var empty := Label.new()
+		empty.text = "遗物货架空"
+		_relic_shop_list.add_child(empty)
+		return
+	var slots_full := owned_count >= max_slots
+	for i in shelf.size():
+		var slot: Dictionary = shelf[i]
+		var relic: RelicDefinition = slot.get("relic") as RelicDefinition
+		var price := int(slot.get("price", 0))
+		var sold := bool(slot.get("sold_out", false))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		var name_lbl := Label.new()
+		var relic_name := relic.display_name if relic != null else "?"
+		var desc := relic.description if relic != null else ""
+		name_lbl.text = "[%d] %s · %d尸骸" % [i + 1, relic_name, price]
+		if desc != "":
+			name_lbl.text += "\n  %s" % desc
+		name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(name_lbl)
+		var buy := Button.new()
+		buy.custom_minimum_size = Vector2(96, 36)
+		if sold:
+			buy.text = "已购"
+			buy.disabled = true
+		elif slots_full:
+			buy.text = "槽满"
+			buy.disabled = true
+		elif current_corpus < price:
+			buy.text = "尸骸不够"
+			buy.disabled = true
+		else:
+			buy.text = "购买"
+			buy.disabled = false
+		var slot_i := i
+		buy.pressed.connect(func() -> void: relic_buy_pressed.emit(slot_i))
+		row.add_child(buy)
+		_relic_shop_list.add_child(row)
+
+
+func _rebuild_owned_relics(owned_relics: Array, max_slots: int) -> void:
+	if _owned_relic_list == null:
+		return
+	for child in _owned_relic_list.get_children():
+		_owned_relic_list.remove_child(child)
+		child.queue_free()
+	var header := Label.new()
+	header.text = "持有遗物 (%d/%d)" % [owned_relics.size(), maxi(1, max_slots)]
+	_owned_relic_list.add_child(header)
+	if owned_relics.is_empty():
+		var empty := Label.new()
+		empty.text = "尚未持有遗物"
+		_owned_relic_list.add_child(empty)
+		return
+	for row_data in owned_relics:
+		var info: Dictionary = row_data
+		var lbl := Label.new()
+		lbl.text = "- %s" % str(info.get("name", "?"))
+		lbl.add_theme_font_size_override("font_size", 12)
+		_owned_relic_list.add_child(lbl)
+
+
 func _build_ui() -> void:
 	_root = Control.new()
 	_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -486,13 +665,26 @@ func _build_ui() -> void:
 	_gold_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	_gold_label.offset_left = 16
 	_gold_label.offset_top = 86
-	_gold_label.offset_right = -16
+	_gold_label.offset_right = -220
 	_gold_label.offset_bottom = 112
 	_gold_label.add_theme_font_size_override("font_size", 15)
 	_gold_label.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.1, 0.85))
 	_gold_label.add_theme_constant_override("outline_size", 2)
 	_gold_label.text = "达克特: 0"
 	_root.add_child(_gold_label)
+
+	_corpus_label = Label.new()
+	_corpus_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_corpus_label.offset_left = 200
+	_corpus_label.offset_top = 86
+	_corpus_label.offset_right = -16
+	_corpus_label.offset_bottom = 112
+	_corpus_label.add_theme_font_size_override("font_size", 15)
+	_corpus_label.add_theme_color_override("font_color", Color(0.88, 0.82, 0.95, 1.0))
+	_corpus_label.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.1, 0.85))
+	_corpus_label.add_theme_constant_override("outline_size", 2)
+	_corpus_label.text = "尸骸: 0"
+	_root.add_child(_corpus_label)
 
 	_hint_label = Label.new()
 	_hint_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
@@ -504,7 +696,7 @@ func _build_ui() -> void:
 	_hint_label.add_theme_font_size_override("font_size", 12)
 	_hint_label.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.1, 0.8))
 	_hint_label.add_theme_constant_override("outline_size", 2)
-	_hint_label.text = "WASD/摇杆移动 · Q集合 · R怒意 · 靠近传送门确认进层"
+	_hint_label.text = "WASD/摇杆移动 · Q集合 · R怒意 · 靠近传送门/神龛"
 	_root.add_child(_hint_label)
 
 	_joystick = VirtualJoystick.new()
@@ -580,6 +772,41 @@ func _build_ui() -> void:
 	empty_o.add_theme_font_size_override("font_size", 12)
 	_oath_list.add_child(empty_o)
 
+	# Phase E: relic inventory under oaths.
+	_relic_panel = PanelContainer.new()
+	_relic_panel.name = "RelicPanel"
+	_relic_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_relic_panel.offset_left = -280
+	_relic_panel.offset_right = -12
+	_relic_panel.offset_top = 218
+	_relic_panel.offset_bottom = 330
+	_relic_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var relic_style := StyleBoxFlat.new()
+	relic_style.bg_color = Color(0.1, 0.09, 0.14, 0.84)
+	relic_style.border_color = Color(0.72, 0.65, 0.88, 0.95)
+	relic_style.set_border_width_all(1)
+	relic_style.set_content_margin_all(8)
+	relic_style.set_corner_radius_all(6)
+	_relic_panel.add_theme_stylebox_override("panel", relic_style)
+	_root.add_child(_relic_panel)
+	var relic_v := VBoxContainer.new()
+	relic_v.add_theme_constant_override("separation", 2)
+	_relic_panel.add_child(relic_v)
+	_relic_title = Label.new()
+	_relic_title.text = "遗物 (0/3)"
+	_relic_title.add_theme_font_size_override("font_size", 13)
+	_relic_title.add_theme_color_override("font_color", Color(0.88, 0.82, 0.95, 1.0))
+	_relic_title.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.1, 0.9))
+	_relic_title.add_theme_constant_override("outline_size", 2)
+	relic_v.add_child(_relic_title)
+	_relic_list = VBoxContainer.new()
+	_relic_list.add_theme_constant_override("separation", 1)
+	relic_v.add_child(_relic_list)
+	var empty_r := Label.new()
+	empty_r.text = "（空）"
+	empty_r.add_theme_font_size_override("font_size", 12)
+	_relic_list.add_child(empty_r)
+
 	_cmd_row = HBoxContainer.new()
 	_cmd_row.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	_cmd_row.offset_left = 12
@@ -609,13 +836,20 @@ func _build_ui() -> void:
 	_portal_btn.pressed.connect(func() -> void: portal_confirm_pressed.emit())
 	_cmd_row.add_child(_portal_btn)
 
-	# Phase B shop panel (interstitial).
-	_shop_panel = _make_centered_panel(Vector2(520, 560))
+	_shrine_btn = Button.new()
+	_shrine_btn.text = "祈愿神龛 (E)"
+	_shrine_btn.custom_minimum_size = Vector2(160, 48)
+	_shrine_btn.visible = false
+	_shrine_btn.pressed.connect(func() -> void: shrine_interact_pressed.emit())
+	_cmd_row.add_child(_shrine_btn)
+
+	# Phase B/E shop panel (interstitial: ducats + corpus relics).
+	_shop_panel = _make_centered_panel(Vector2(560, 640))
 	_shop_panel.visible = false
 	_root.add_child(_shop_panel)
 	var shop_scroll := ScrollContainer.new()
 	shop_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	shop_scroll.custom_minimum_size = Vector2(480, 520)
+	shop_scroll.custom_minimum_size = Vector2(520, 600)
 	_shop_panel.add_child(shop_scroll)
 	var shop_v := VBoxContainer.new()
 	shop_v.add_theme_constant_override("separation", 8)
@@ -624,7 +858,7 @@ func _build_ui() -> void:
 	_shop_title = Label.new()
 	_shop_title.add_theme_font_size_override("font_size", 18)
 	_shop_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_shop_title.text = "招兵店"
+	_shop_title.text = "招兵/遗物"
 	shop_v.add_child(_shop_title)
 	_shop_status = Label.new()
 	_shop_status.add_theme_font_size_override("font_size", 13)
@@ -632,7 +866,7 @@ func _build_ui() -> void:
 	_shop_status.text = "种类 0/6"
 	shop_v.add_child(_shop_status)
 	var shelf_header := Label.new()
-	shelf_header.text = "货架"
+	shelf_header.text = "招兵货架（达克特）"
 	shop_v.add_child(shelf_header)
 	_shop_list = VBoxContainer.new()
 	_shop_list.add_theme_constant_override("separation", 6)
@@ -653,11 +887,56 @@ func _build_ui() -> void:
 	_shop_army_list = VBoxContainer.new()
 	_shop_army_list.add_theme_constant_override("separation", 4)
 	shop_v.add_child(_shop_army_list)
+	var relic_header := Label.new()
+	relic_header.text = "遗物货架（尸骸）"
+	relic_header.add_theme_color_override("font_color", Color(0.88, 0.82, 0.95, 1.0))
+	shop_v.add_child(relic_header)
+	_relic_shop_status = Label.new()
+	_relic_shop_status.add_theme_font_size_override("font_size", 13)
+	_relic_shop_status.text = "遗物槽 0/3"
+	shop_v.add_child(_relic_shop_status)
+	_relic_shop_list = VBoxContainer.new()
+	_relic_shop_list.add_theme_constant_override("separation", 6)
+	shop_v.add_child(_relic_shop_list)
+	_relic_refresh_btn = Button.new()
+	_relic_refresh_btn.text = "刷新遗物"
+	_relic_refresh_btn.custom_minimum_size = Vector2(200, 40)
+	_relic_refresh_btn.pressed.connect(func() -> void: relic_refresh_pressed.emit())
+	shop_v.add_child(_relic_refresh_btn)
+	_owned_relic_list = VBoxContainer.new()
+	_owned_relic_list.add_theme_constant_override("separation", 2)
+	shop_v.add_child(_owned_relic_list)
 	_shop_next_btn = Button.new()
 	_shop_next_btn.text = "下一层"
 	_shop_next_btn.custom_minimum_size = Vector2(0, 48)
 	_shop_next_btn.pressed.connect(func() -> void: next_floor_pressed.emit())
 	shop_v.add_child(_shop_next_btn)
+
+	_shrine_panel = _make_centered_panel(Vector2(360, 220))
+	_shrine_panel.visible = false
+	_root.add_child(_shrine_panel)
+	var shrine_v := VBoxContainer.new()
+	shrine_v.add_theme_constant_override("separation", 10)
+	_shrine_panel.add_child(shrine_v)
+	_shrine_title = Label.new()
+	_shrine_title.text = "神龛"
+	_shrine_title.add_theme_font_size_override("font_size", 18)
+	_shrine_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	shrine_v.add_child(_shrine_title)
+	var shrine_hint := Label.new()
+	shrine_hint.text = "选择一项恩惠"
+	shrine_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	shrine_v.add_child(shrine_hint)
+	var buff_btn := Button.new()
+	buff_btn.text = "短时攻击强化"
+	buff_btn.custom_minimum_size = Vector2(0, 44)
+	buff_btn.pressed.connect(func() -> void: shrine_choice_pressed.emit(0))
+	shrine_v.add_child(buff_btn)
+	var corpus_btn := Button.new()
+	corpus_btn.text = "获得尸骸"
+	corpus_btn.custom_minimum_size = Vector2(0, 44)
+	corpus_btn.pressed.connect(func() -> void: shrine_choice_pressed.emit(1))
+	shrine_v.add_child(corpus_btn)
 
 	_chest_panel = _make_centered_panel(Vector2(360, 220))
 	_chest_panel.visible = false

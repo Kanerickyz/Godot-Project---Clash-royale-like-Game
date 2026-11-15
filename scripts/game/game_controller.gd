@@ -1,6 +1,6 @@
 class_name GameController
 extends Node2D
-## Phase D: floor/shop/merge/revive + champion oaths (keyword bonds).
+## Phase E: corpus + relics shop + floor loot (chest/shrine/elite); builds on A–D.
 
 
 enum RunPhase { FLOOR, INTERSTITIAL, GAME_OVER }
@@ -11,11 +11,13 @@ const PATH_FLOOR_RUN := "res://resources/world/floor_run.tres"
 const PATH_THREAT := "res://resources/combat/threat_config.tres"
 const PATH_SHOP_ECONOMY := "res://resources/world/shop_economy.tres"
 const PATH_MERGE_RANK := "res://resources/combat/merge_rank.tres"
+const PATH_CORPUS_RELICS := "res://resources/world/corpus_relics.tres"
 const PATH_OATH_IRON_WALL := "res://resources/oaths/oath_iron_wall.tres"
 const PATH_OATH_MYRIAD_BONES := "res://resources/oaths/oath_myriad_bones.tres"
 const PATH_OATH_TAUT_BOW := "res://resources/oaths/oath_taut_bow.tres"
 
 var gold: int = 0
+var corpus: int = 0
 var game_over: bool = false
 var ui_blocking: bool = false
 var run_phase: RunPhase = RunPhase.FLOOR
@@ -29,7 +31,9 @@ var _spawn_cfg: WorldSpawnConfig
 var _floor_cfg: FloorRunConfig
 var _shop_cfg: ShopEconomyConfig
 var _merge_cfg: MergeRankConfig
+var _corpus_cfg: CorpusRelicsConfig
 var _shop: ShopService = ShopService.new()
+var _relics: RelicService = RelicService.new()
 var _threat: ThreatClock = ThreatClock.new()
 var _revive_queue: ReviveQueue = ReviveQueue.new()
 var _oath_service: OathService = OathService.new()
@@ -43,14 +47,17 @@ var _portal: FloorPortal
 var _hud: GameHud
 var _followers: Array[SquadMember] = []
 var _focused_chest: RoamChest
+var _focused_shrine: FloorShrine
 var _respawn_timer: float = 0.0
 var _next_respawn_interval: float = 30.0
 var _enemy_serial: int = 0
 var _chest_serial: int = 0
+var _shrine_serial: int = 0
 var _occupied_spots: Array[Vector2] = []
 var _hitstop_active: bool = false
 var _hitstop_restore_scale: float = 1.0
 var _shop_status: String = ""
+var _relic_status: String = ""
 var _last_merge_log: String = ""
 var _merge_rebuild_guard: bool = false
 
@@ -60,6 +67,8 @@ var _rage_cd: float = 0.0
 var _rage_active_left: float = 0.0
 var _portal_confirm_left: float = 0.0
 var _portal_holding: bool = false
+var _shrine_buff_left: float = 0.0
+var _shrine_choice_open: bool = false
 
 
 func _ready() -> void:
@@ -72,12 +81,15 @@ func _ready() -> void:
 	_threat.configure(_load_threat_config())
 	_init_oath_service()
 	_init_shop_service()
+	_init_relic_service()
 	gold = _shop_cfg.starting_ducats if _shop_cfg != null else 20
+	corpus = _corpus_cfg.starting_corpus if _corpus_cfg != null else 0
 	_build_world_shell()
 	_hud = GameHud.new()
 	_hud.name = "HUD"
 	add_child(_hud)
 	_hud.refresh_gold(gold)
+	_hud.refresh_corpus(corpus)
 	_hud.restart_pressed.connect(_on_restart)
 	_hud.assemble_pressed.connect(_on_assemble_pressed)
 	_hud.rage_pressed.connect(_on_rage_pressed)
@@ -87,10 +99,15 @@ func _ready() -> void:
 	_hud.shop_refresh_pressed.connect(_on_shop_refresh)
 	_hud.shop_upgrade_pressed.connect(_on_shop_upgrade)
 	_hud.shop_sell_pressed.connect(_on_shop_sell)
+	_hud.relic_buy_pressed.connect(_on_relic_buy)
+	_hud.relic_refresh_pressed.connect(_on_relic_refresh)
+	_hud.shrine_choice_pressed.connect(_on_shrine_choice)
+	_hud.shrine_interact_pressed.connect(_on_shrine_interact_pressed)
 	_start_floor(true)
-	_hud.set_world_hint("WASD/摇杆移动 · Q集合 · R怒意 · 靠近传送门进层间商店")
+	_hud.set_world_hint("WASD/摇杆移动 · Q集合 · R怒意 · 靠近传送门/神龛")
 	_refresh_revive_hud()
 	_refresh_oaths()
+	_refresh_relic_hud()
 
 
 func get_move_vector() -> Vector2:
@@ -165,12 +182,36 @@ func get_ducats() -> int:
 	return gold
 
 
+func get_corpus() -> int:
+	return corpus
+
+
 func get_shop_service() -> ShopService:
 	return _shop
 
 
+func get_relic_service() -> RelicService:
+	return _relics
+
+
 func get_shop_economy() -> ShopEconomyConfig:
 	return _shop_cfg
+
+
+func get_corpus_relics_config() -> CorpusRelicsConfig:
+	return _corpus_cfg
+
+
+func get_relic_rows() -> Array:
+	return _relics.get_hud_rows() if _relics != null else []
+
+
+func get_relic_revive_time_multiplier() -> float:
+	return _relics.revive_time_multiplier() if _relics != null else 1.0
+
+
+func get_focused_shrine() -> FloorShrine:
+	return _focused_shrine
 
 
 func get_follower_count() -> int:
@@ -290,6 +331,17 @@ func debug_add_ducats(amount: int) -> void:
 		_refresh_shop_hud()
 
 
+## Test helper: grant corpus without pickup.
+func debug_add_corpus(amount: int) -> void:
+	if amount == 0:
+		return
+	corpus = maxi(0, corpus + amount)
+	if _hud != null:
+		_hud.refresh_corpus(corpus)
+	if run_phase == RunPhase.INTERSTITIAL:
+		_refresh_shop_hud()
+
+
 ## Test helpers for shop actions (same as HUD buttons).
 func debug_shop_buy(slot_index: int) -> Dictionary:
 	return _try_shop_buy(slot_index)
@@ -305,6 +357,26 @@ func debug_shop_upgrade() -> Dictionary:
 
 func debug_shop_sell(follower_index: int) -> Dictionary:
 	return _try_shop_sell(follower_index)
+
+
+func debug_relic_buy(slot_index: int) -> Dictionary:
+	return _try_relic_buy(slot_index)
+
+
+func debug_relic_refresh() -> Dictionary:
+	return _try_relic_refresh()
+
+
+## Test helper: credit corpus as if a kill drop was collected (applies find bonus).
+func debug_grant_kill_corpus(is_elite: bool = false) -> int:
+	var base := 0
+	if _corpus_cfg != null:
+		base = _corpus_cfg.roll_kill_corpus(_rng, is_elite)
+	var bonus := _relics.corpus_find_bonus() if _relics != null else 0
+	var total := maxi(0, base + bonus)
+	if total > 0:
+		_on_corpus_collected(total)
+	return total
 
 
 ## Test helper: recruit a unit definition (triggers auto-merge).
@@ -399,6 +471,7 @@ func _process(delta: float) -> void:
 		return
 	if run_phase == RunPhase.FLOOR and not game_over:
 		_update_chest_focus()
+		_update_shrine_focus()
 
 
 func _update_command_input() -> void:
@@ -409,7 +482,10 @@ func _update_command_input() -> void:
 	if Input.is_physical_key_pressed(KEY_R):
 		_try_rage()
 	if Input.is_physical_key_pressed(KEY_E):
-		_try_portal_confirm(true)
+		if _focused_shrine != null and not _focused_shrine.is_used():
+			_open_shrine_choice(_focused_shrine)
+		else:
+			_try_portal_confirm(true)
 	else:
 		_portal_holding = false
 		_portal_confirm_left = 0.0
@@ -426,6 +502,12 @@ func _update_commands(delta: float) -> void:
 		_rage_active_left = maxf(0.0, _rage_active_left - delta)
 		if _rage_active_left <= 0.0:
 			_clear_rage()
+	if _shrine_buff_left > 0.0:
+		_shrine_buff_left = maxf(0.0, _shrine_buff_left - delta)
+		if _shrine_buff_left <= 0.0:
+			_refresh_temp_damage_mults()
+			if _hud != null:
+				_hud.set_world_hint("神龛增益结束")
 	if _hud != null and _floor_cfg != null:
 		_hud.set_command_cooldowns(
 			_assemble_cd,
@@ -480,8 +562,10 @@ func _try_rage() -> void:
 func _apply_rage(active: bool) -> void:
 	if _floor_cfg == null:
 		return
-	var dmg := _floor_cfg.rage_damage_mult if active else 1.0
+	var rage_dmg := _floor_cfg.rage_damage_mult if active else 1.0
 	var spd := _floor_cfg.rage_speed_mult if active else 1.0
+	var shrine_dmg := _shrine_attack_mult()
+	var dmg := rage_dmg * shrine_dmg
 	for member in _followers:
 		if member == null or not is_instance_valid(member) or member.is_dead:
 			continue
@@ -495,6 +579,16 @@ func _apply_rage(active: bool) -> void:
 
 func _clear_rage() -> void:
 	_apply_rage(false)
+
+
+func _shrine_attack_mult() -> float:
+	if _shrine_buff_left <= 0.0 or _corpus_cfg == null:
+		return 1.0
+	return 1.0 + maxf(0.0, _corpus_cfg.shrine_attack_bonus)
+
+
+func _refresh_temp_damage_mults() -> void:
+	_apply_rage(_rage_active_left > 0.0)
 
 
 func _update_portal(delta: float) -> void:
@@ -547,9 +641,15 @@ func _enter_interstitial() -> void:
 		interest = _shop.settle_interest(gold)
 		gold += interest
 		_shop.roll_shelf(_rng)
+	if _relics != null:
+		_relics.roll_shelf(_rng)
 	_shop_status = "利息 +%d" % interest if interest >= 0 else ""
+	_relic_status = ""
+	_shrine_choice_open = false
 	if _hud != null:
+		_hud.hide_shrine_choice()
 		_hud.refresh_gold(gold)
+		_hud.refresh_corpus(corpus)
 		_refresh_shop_hud()
 
 
@@ -579,23 +679,36 @@ func _start_floor(is_run_start: bool) -> void:
 	_portal_confirm_left = 0.0
 	_portal_holding = false
 	_occupied_spots.clear()
+	_shrine_buff_left = 0.0
+	_shrine_choice_open = false
+	_focused_shrine = null
 	_clear_floor_entities(is_run_start)
 	_generate_map()
 	if is_run_start:
 		_spawn_captain()
 		_spawn_starting_followers()
+		if _relics != null:
+			_relics.clear_run()
+			corpus = _corpus_cfg.starting_corpus if _corpus_cfg != null else 0
 	else:
 		_reposition_army_to_safe()
 	_spawn_enemies_initial()
 	_spawn_chests_initial()
+	_spawn_shrines_initial()
 	_spawn_portal()
 	_roll_next_respawn_interval()
 	_set_combat_enabled(true)
 	_refresh_threat_hud()
+	_refresh_temp_damage_mults()
+	_refresh_oaths()
+	_refresh_relic_hud()
 	if _hud != null:
 		_hud.refresh_floor(floor_index)
+		_hud.refresh_corpus(corpus)
 		_hud.hide_interstitial()
+		_hud.hide_shrine_choice()
 		_hud.set_portal_prompt_visible(false)
+		_hud.set_shrine_prompt_visible(false)
 
 
 func _clear_floor_entities(clear_army: bool) -> void:
@@ -626,6 +739,7 @@ func _clear_floor_entities(clear_army: bool) -> void:
 		child.free()
 	_portal = null
 	_focused_chest = null
+	_focused_shrine = null
 	if clear_army:
 		_captain = null
 		_followers.clear()
@@ -730,9 +844,46 @@ func _spawn_portal() -> void:
 	_entities.add_child(_portal)
 
 
+func _spawn_shrines_initial() -> void:
+	var count := 1
+	if _corpus_cfg != null:
+		count = maxi(0, _corpus_cfg.start_shrine_count)
+	for _i in count:
+		_spawn_one_shrine(_sample_loot_spawn_pos())
+
+
+func _spawn_one_shrine(at: Vector2) -> FloorShrine:
+	if _entities == null:
+		return null
+	var shrine := FloorShrine.new()
+	shrine.name = "Shrine_%d" % _shrine_serial
+	_shrine_serial += 1
+	shrine.configure()
+	shrine.global_position = at
+	_entities.add_child(shrine)
+	_occupied_spots.append(at)
+	return shrine
+
+
+func _sample_loot_spawn_pos() -> Vector2:
+	if _map == null:
+		return Vector2(500, 500)
+	var avoid := _collect_live_avoid_positions()
+	var sep := _spawn_cfg.spawn_min_separation if _spawn_cfg != null else 90.0
+	var margin := _spawn_cfg.spawn_edge_margin if _spawn_cfg != null else 56.0
+	var pos := _map.sample_spawn_point(_rng, avoid, sep, margin, true, true)
+	_occupied_spots.append(pos)
+	return pos
+
+
 func _spawn_enemies_initial() -> void:
 	var count := _rng.randi_range(_spawn_cfg.start_enemy_min, _spawn_cfg.start_enemy_max)
-	_spawn_enemy_batch(count, false)
+	var elite_n := 1 if _corpus_cfg == null else maxi(0, _corpus_cfg.start_elite_count)
+	elite_n = mini(elite_n, count)
+	var grunt_n := maxi(0, count - elite_n)
+	_spawn_enemy_batch(grunt_n, false)
+	for _i in elite_n:
+		_spawn_one_enemy(_sample_loot_spawn_pos(), true)
 
 
 func _spawn_chests_initial() -> void:
@@ -873,26 +1024,44 @@ func _spawn_enemy_batch(want: int, respect_cap: bool) -> void:
 		_occupied_spots.append(pos)
 
 
-func _spawn_one_enemy(at: Vector2) -> Enemy:
+func _spawn_one_enemy(at: Vector2, as_elite: bool = false) -> Enemy:
 	var path := _floor_cfg.enemy_path if _floor_cfg != null else "res://resources/units/enemy_grunt.tres"
-	var def := _scale_enemy_def(_load_unit(path))
+	var def := _scale_enemy_def(_load_unit(path), as_elite)
 	var e := Enemy.new()
-	e.name = "Enemy_%d" % _enemy_serial
+	e.name = ("Elite_%d" % _enemy_serial) if as_elite else ("Enemy_%d" % _enemy_serial)
 	_enemy_serial += 1
-	e.configure(def, _rng)
+	e.configure(def, _rng, as_elite)
+	var corpus_amt := 0
+	if _corpus_cfg != null:
+		corpus_amt = _corpus_cfg.roll_kill_corpus(_rng, as_elite)
+	var ducat_override := -1
+	if as_elite and def != null and _corpus_cfg != null:
+		var lo := mini(def.gold_drop_min, def.gold_drop_max)
+		var hi := maxi(def.gold_drop_min, def.gold_drop_max)
+		var base_gold := _rng.randi_range(lo, hi) if hi > 0 else 1
+		ducat_override = maxi(1, int(round(float(base_gold) * maxf(1.0, _corpus_cfg.elite_ducat_multiplier))))
+	e.set_loot_overrides(corpus_amt, ducat_override)
 	e.global_position = at
 	e.gold_dropped.connect(_on_gold_dropped)
+	e.corpus_dropped.connect(_on_corpus_dropped)
 	_entities.add_child(e)
 	return e
 
 
-func _scale_enemy_def(def: UnitDefinition) -> UnitDefinition:
+func _scale_enemy_def(def: UnitDefinition, as_elite: bool = false) -> UnitDefinition:
 	if def == null:
 		return def
 	var scaled := def.duplicate(true) as UnitDefinition
 	var scale := _threat.get_enemy_stat_scale()
+	if as_elite and _corpus_cfg != null:
+		scale *= maxf(1.0, _corpus_cfg.elite_hp_multiplier)
 	scaled.max_hp = maxi(1, int(ceil(float(scaled.max_hp) * scale)))
-	scaled.attack_damage = maxi(1, int(round(float(scaled.attack_damage) * scale)))
+	var dmg_scale := _threat.get_enemy_stat_scale()
+	if as_elite and _corpus_cfg != null:
+		dmg_scale *= maxf(1.0, _corpus_cfg.elite_damage_multiplier)
+	scaled.attack_damage = maxi(1, int(round(float(scaled.attack_damage) * dmg_scale)))
+	if as_elite:
+		scaled.display_name = "精英·%s" % scaled.display_name
 	return scaled
 
 
@@ -964,10 +1133,15 @@ func spawn_hostile_minion(def: UnitDefinition, at: Vector2) -> Enemy:
 		return null
 	var e := Enemy.new()
 	e.name = "BossMinion_%d" % _entities.get_child_count()
-	e.configure(def, _rng)
+	e.configure(def, _rng, false)
+	var corpus_amt := 0
+	if _corpus_cfg != null:
+		corpus_amt = _corpus_cfg.roll_kill_corpus(_rng, false)
+	e.set_loot_overrides(corpus_amt, -1)
 	e.global_position = at
 	e.aggro_range = 200.0
 	e.gold_dropped.connect(_on_gold_dropped)
+	e.corpus_dropped.connect(_on_corpus_dropped)
 	_entities.add_child(e)
 	return e
 
@@ -1034,6 +1208,8 @@ func _enqueue_follower_def(def: UnitDefinition) -> void:
 	roster_for_oath.append(def)
 	if _oath_service != null:
 		sec *= _oath_service.revive_time_multiplier(roster_for_oath)
+	if _relics != null:
+		sec *= _relics.revive_time_multiplier()
 	_revive_queue.enqueue(def, sec)
 
 
@@ -1140,6 +1316,23 @@ func _on_shop_upgrade() -> void:
 
 func _on_shop_sell(follower_index: int) -> void:
 	_try_shop_sell(follower_index)
+
+
+func _on_relic_buy(slot_index: int) -> void:
+	_try_relic_buy(slot_index)
+
+
+func _on_relic_refresh() -> void:
+	_try_relic_refresh()
+
+
+func _on_shrine_interact_pressed() -> void:
+	if _focused_shrine != null and not _focused_shrine.is_used():
+		_open_shrine_choice(_focused_shrine)
+
+
+func _on_shrine_choice(choice_index: int) -> void:
+	_resolve_shrine_choice(choice_index)
 
 
 func _try_shop_buy(slot_index: int) -> Dictionary:
@@ -1284,13 +1477,25 @@ func _refresh_oaths() -> void:
 	_hud.refresh_oaths(get_oath_rows())
 
 
-func _apply_oath_effects_to_army() -> void:
-	if _oath_service == null:
+func _refresh_relic_hud() -> void:
+	if _hud == null:
 		return
+	var max_slots := _relics.max_slots() if _relics != null else 3
+	_hud.refresh_relics(get_relic_rows(), max_slots)
+
+
+func _apply_oath_effects_to_army() -> void:
 	var roster := get_army_roster_defs()
-	var dr := _oath_service.damage_taken_multiplier(roster)
-	var ranged_dmg := _oath_service.ranged_damage_multiplier(roster)
-	var ranged_iv := _oath_service.ranged_interval_multiplier(roster)
+	var dr := 1.0
+	var ranged_dmg := 1.0
+	var ranged_iv := 1.0
+	if _oath_service != null:
+		dr = _oath_service.damage_taken_multiplier(roster)
+		ranged_dmg = _oath_service.ranged_damage_multiplier(roster)
+		ranged_iv = _oath_service.ranged_interval_multiplier(roster)
+	var relic_dr := _relics.damage_taken_multiplier() if _relics != null else 1.0
+	var relic_atk := _relics.attack_damage_multiplier() if _relics != null else 1.0
+	dr *= relic_dr
 	for m in _followers:
 		if m == null or not is_instance_valid(m) or m.is_dead:
 			continue
@@ -1300,11 +1505,11 @@ func _apply_oath_effects_to_army() -> void:
 			kw = m.roster_definition.keyword
 		elif m.definition != null:
 			kw = m.definition.keyword
-		if _oath_service.applies_ranged_to(kw) and kw == &"射术":
-			m.oath_damage_multiplier = ranged_dmg
+		if _oath_service != null and _oath_service.applies_ranged_to(kw) and kw == &"射术":
+			m.oath_damage_multiplier = ranged_dmg * relic_atk
 			m.oath_attack_interval_multiplier = ranged_iv
 		else:
-			m.oath_damage_multiplier = 1.0
+			m.oath_damage_multiplier = relic_atk
 			m.oath_attack_interval_multiplier = 1.0
 	if _captain != null and is_instance_valid(_captain) and not _captain.is_dead:
 		_captain.incoming_damage_multiplier = dr
@@ -1317,6 +1522,10 @@ func _refresh_shop_hud() -> void:
 		return
 	var type_cap := _shop_cfg.max_unit_types if _shop_cfg != null else 6
 	var type_count := _shop.count_unique_types(_collect_owned_type_ids())
+	var relic_shelf: Array = _relics.shelf if _relics != null else []
+	var relic_refresh := _relics.get_refresh_cost() if _relics != null else 2
+	var owned_relics := get_relic_rows()
+	var max_slots := _relics.max_slots() if _relics != null else 3
 	_hud.show_shop_interstitial(
 		floor_index,
 		_shop.shelf,
@@ -1328,7 +1537,13 @@ func _refresh_shop_hud() -> void:
 		_army_rows_for_hud(),
 		type_count,
 		type_cap,
-		_shop_status
+		_shop_status,
+		corpus,
+		relic_shelf,
+		relic_refresh,
+		owned_relics,
+		max_slots,
+		_relic_status
 	)
 
 
@@ -1350,6 +1565,126 @@ func _shop_fail_message(code: StringName) -> String:
 			return "无法完成操作"
 
 
+func _try_relic_buy(slot_index: int) -> Dictionary:
+	if run_phase != RunPhase.INTERSTITIAL or game_over or _relics == null:
+		return {"ok": false, "code": &"wrong_phase"}
+	var result := _relics.try_buy(slot_index, corpus)
+	if not bool(result.get("ok", false)):
+		_relic_status = _relic_fail_message(StringName(str(result.get("code", &""))))
+		_refresh_shop_hud()
+		return result
+	var cost := int(result.get("cost", 0))
+	var relic: RelicDefinition = result.get("relic") as RelicDefinition
+	corpus = maxi(0, corpus - cost)
+	_relic_status = "购入遗物 %s (-%d尸骸)" % [
+		relic.display_name if relic != null else "?",
+		cost,
+	]
+	_refresh_oaths()
+	_refresh_relic_hud()
+	_refresh_shop_hud()
+	return result
+
+
+func _try_relic_refresh() -> Dictionary:
+	if run_phase != RunPhase.INTERSTITIAL or game_over or _relics == null:
+		return {"ok": false, "code": &"wrong_phase"}
+	var result := _relics.try_refresh(corpus, _rng)
+	if not bool(result.get("ok", false)):
+		_relic_status = _relic_fail_message(StringName(str(result.get("code", &""))))
+		_refresh_shop_hud()
+		return result
+	var cost := int(result.get("cost", 0))
+	corpus = maxi(0, corpus - cost)
+	_relic_status = "遗物货架已刷新 (-%d尸骸)" % cost
+	_refresh_shop_hud()
+	return result
+
+
+func _relic_fail_message(code: StringName) -> String:
+	match code:
+		RelicService.RESULT_NOT_ENOUGH:
+			return "尸骸不足"
+		RelicService.RESULT_SLOTS_FULL:
+			return "遗物槽已满"
+		RelicService.RESULT_SOLD_OUT:
+			return "该遗物已售出"
+		RelicService.RESULT_BAD_SLOT:
+			return "无效遗物槽"
+		RelicService.RESULT_NO_POOL:
+			return "遗物池为空"
+		_:
+			return "无法购买遗物"
+
+
+func _update_shrine_focus() -> void:
+	_focused_shrine = null
+	if ui_blocking or game_over or _shrine_choice_open or not is_inside_tree():
+		if _hud != null:
+			_hud.set_shrine_prompt_visible(false)
+		return
+	if _captain == null or not is_instance_valid(_captain):
+		return
+	var radius := _corpus_cfg.shrine_interact_radius if _corpus_cfg != null else 90.0
+	var best_dist := radius
+	for node in get_tree().get_nodes_in_group(&"shrines"):
+		if node == null or not is_instance_valid(node):
+			continue
+		var shrine := node as FloorShrine
+		if shrine == null or shrine.is_used():
+			continue
+		var dist := _captain.global_position.distance_to(shrine.global_position)
+		if dist <= best_dist:
+			best_dist = dist
+			_focused_shrine = shrine
+	if _hud != null:
+		_hud.set_shrine_prompt_visible(_focused_shrine != null)
+
+
+func _open_shrine_choice(shrine: FloorShrine) -> void:
+	if shrine == null or shrine.is_used() or _shrine_choice_open or game_over:
+		return
+	if run_phase != RunPhase.FLOOR:
+		return
+	_shrine_choice_open = true
+	ui_blocking = true
+	_focused_shrine = shrine
+	if _hud != null:
+		_hud.show_shrine_choice("选择神龛恩惠")
+
+
+func _resolve_shrine_choice(choice_index: int) -> void:
+	if not _shrine_choice_open:
+		return
+	var shrine := _focused_shrine
+	_shrine_choice_open = false
+	ui_blocking = false
+	if _hud != null:
+		_hud.hide_shrine_choice()
+	if shrine == null or not is_instance_valid(shrine) or shrine.is_used():
+		return
+	shrine.mark_used()
+	if choice_index == 0:
+		# Short attack buff.
+		var dur := 12.0
+		if _corpus_cfg != null:
+			dur = maxf(1.0, _corpus_cfg.shrine_buff_duration_sec)
+		_shrine_buff_left = dur
+		_refresh_temp_damage_mults()
+		if _hud != null:
+			_hud.set_world_hint("神龛：短时攻击强化 %.0fs" % dur)
+	else:
+		var reward := 3
+		if _corpus_cfg != null:
+			reward = maxi(1, _corpus_cfg.shrine_corpus_reward)
+		_on_corpus_collected(reward)
+		if _hud != null:
+			_hud.set_world_hint("神龛：获得 %d 尸骸" % reward)
+	_focused_shrine = null
+	if _hud != null:
+		_hud.set_shrine_prompt_visible(false)
+
+
 func _init_shop_service() -> void:
 	var pool: Array[UnitDefinition] = []
 	if _shop_cfg != null:
@@ -1358,6 +1693,27 @@ func _init_shop_service() -> void:
 			if def != null:
 				pool.append(def)
 	_shop.configure(_shop_cfg, pool)
+
+
+func _init_relic_service() -> void:
+	_corpus_cfg = _load_corpus_relics_config()
+	var pool: Array[RelicDefinition] = []
+	if _corpus_cfg != null:
+		for path in _corpus_cfg.relic_pool_paths:
+			var res := load(str(path))
+			if res is RelicDefinition:
+				pool.append((res as RelicDefinition).duplicate(true) as RelicDefinition)
+			else:
+				push_error("GameController: failed to load RelicDefinition %s" % path)
+	_relics.configure(_corpus_cfg, pool)
+
+
+func _load_corpus_relics_config() -> CorpusRelicsConfig:
+	var res := load(PATH_CORPUS_RELICS)
+	if res is CorpusRelicsConfig:
+		return (res as CorpusRelicsConfig).duplicate(true) as CorpusRelicsConfig
+	push_warning("GameController: missing corpus_relics.tres, using defaults")
+	return CorpusRelicsConfig.new()
 
 
 func _init_oath_service() -> void:
@@ -1407,12 +1763,16 @@ func _on_chest_smashed(chest: RoamChest, placeholder_gold: int) -> void:
 	var amount := placeholder_gold
 	if _shop_cfg != null:
 		amount = maxi(1, _shop_cfg.chest_ducats)
-	if amount <= 0:
-		return
 	var at := _captain.global_position if _captain != null else Vector2.ZERO
 	if chest != null and is_instance_valid(chest):
 		at = chest.global_position
-	_on_gold_dropped(amount, at)
+	if amount > 0:
+		_on_gold_dropped(amount, at)
+	var corpus_amt := 0
+	if _corpus_cfg != null:
+		corpus_amt = _corpus_cfg.roll_chest_corpus(_rng)
+	if corpus_amt > 0:
+		_on_corpus_dropped(corpus_amt, at + Vector2(18, 8))
 
 
 func _on_gold_dropped(amount: int, at: Vector2) -> void:
@@ -1426,12 +1786,33 @@ func _on_gold_dropped(amount: int, at: Vector2) -> void:
 	drop.collected.connect(_on_gold_collected)
 
 
+func _on_corpus_dropped(amount: int, at: Vector2) -> void:
+	if game_over or amount <= 0:
+		return
+	var bonus := _relics.corpus_find_bonus() if _relics != null else 0
+	var total := amount + bonus
+	var drop := CorpusPickup.new()
+	drop.name = "CorpusPickup"
+	_entities.add_child(drop)
+	drop.global_position = at
+	drop.configure(total)
+	drop.collected.connect(_on_corpus_collected)
+
+
 func _on_gold_collected(amount: int) -> void:
 	if game_over:
 		return
 	gold += amount
 	if _hud != null:
 		_hud.refresh_gold(gold)
+
+
+func _on_corpus_collected(amount: int) -> void:
+	if game_over:
+		return
+	corpus += amount
+	if _hud != null:
+		_hud.refresh_corpus(corpus)
 
 
 func _on_captain_died(_who: Combatant) -> void:

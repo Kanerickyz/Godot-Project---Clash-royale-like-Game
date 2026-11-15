@@ -38,8 +38,8 @@ var _charge_fx_tween: Tween
 const ALLY_HITSTOP_SEC := 0.1
 
 
-func configure(def: UnitDefinition, rng: RandomNumberGenerator) -> void:
-	super.configure(def, rng)
+func configure(def: UnitDefinition, rng: RandomNumberGenerator, p_elite: bool = false) -> void:
+	super.configure(def, rng, p_elite)
 	if behavior == null:
 		behavior = _load_behavior(DEFAULT_BEHAVIOR_PATH)
 	if minion_definition == null:
