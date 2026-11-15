@@ -2,7 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/unit_captain_blue.png-971e9d2aa278094c6af0baa22c66fd3b.ctex"
+uid="uid://psye5bims78j"
+path="res://.godot/imported/unit_captain_blue.png-67db0be3f1b1848f4ffa2552075e81b6.ctex"
 metadata={
 "vram_texture": false
 }
@@ -10,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/paper_cutout/units_autochess/unit_captain_blue.png"
-dest_files=["res://.godot/imported/unit_captain_blue.png-971e9d2aa278094c6af0baa22c66fd3b.ctex"]
+dest_files=["res://.godot/imported/unit_captain_blue.png-67db0be3f1b1848f4ffa2552075e81b6.ctex"]
 
 [params]
 

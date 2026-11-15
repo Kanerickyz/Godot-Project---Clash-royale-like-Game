@@ -2,7 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/unit_mirror_warden_red.png-f9fb02d647e150d68dc71b11137c7fba.ctex"
+uid="uid://bdyy746xtry85"
+path="res://.godot/imported/unit_mirror_warden_red.png-3ab5451ea2fee51e1d6c704460e76369.ctex"
 metadata={
 "vram_texture": false
 }
@@ -10,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/paper_cutout/units_autochess/unit_mirror_warden_red.png"
-dest_files=["res://.godot/imported/unit_mirror_warden_red.png-f9fb02d647e150d68dc71b11137c7fba.ctex"]
+dest_files=["res://.godot/imported/unit_mirror_warden_red.png-3ab5451ea2fee51e1d6c704460e76369.ctex"]
 
 [params]
 

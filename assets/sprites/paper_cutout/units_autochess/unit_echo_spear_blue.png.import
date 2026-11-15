@@ -2,7 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/unit_echo_spear_blue.png-04cb30105809fe6c7a5394ab6508b5fa.ctex"
+uid="uid://bw2gw5yo8i8wo"
+path="res://.godot/imported/unit_echo_spear_blue.png-52661cad5fde73a83492284446f4125e.ctex"
 metadata={
 "vram_texture": false
 }
@@ -10,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/paper_cutout/units_autochess/unit_echo_spear_blue.png"
-dest_files=["res://.godot/imported/unit_echo_spear_blue.png-04cb30105809fe6c7a5394ab6508b5fa.ctex"]
+dest_files=["res://.godot/imported/unit_echo_spear_blue.png-52661cad5fde73a83492284446f4125e.ctex"]
 
 [params]
 

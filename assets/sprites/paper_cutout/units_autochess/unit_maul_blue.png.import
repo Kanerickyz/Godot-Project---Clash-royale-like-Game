@@ -2,7 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/unit_maul_blue.png-7b9b1986ba9d192d819cdc5a3a0d387f.ctex"
+uid="uid://y6o25ypjws2a"
+path="res://.godot/imported/unit_maul_blue.png-1de5a1688a64c292398165ddb2a629ce.ctex"
 metadata={
 "vram_texture": false
 }
@@ -10,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/paper_cutout/units_autochess/unit_maul_blue.png"
-dest_files=["res://.godot/imported/unit_maul_blue.png-7b9b1986ba9d192d819cdc5a3a0d387f.ctex"]
+dest_files=["res://.godot/imported/unit_maul_blue.png-1de5a1688a64c292398165ddb2a629ce.ctex"]
 
 [params]
 

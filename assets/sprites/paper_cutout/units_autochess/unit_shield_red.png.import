@@ -2,7 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/unit_shield_red.png-fa6d0bef76dac04f3b133608e517f8c9.ctex"
+uid="uid://c4lakn8qrqsd6"
+path="res://.godot/imported/unit_shield_red.png-443ab8f6d1362b090ed1e403a8294156.ctex"
 metadata={
 "vram_texture": false
 }
@@ -10,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/paper_cutout/units_autochess/unit_shield_red.png"
-dest_files=["res://.godot/imported/unit_shield_red.png-fa6d0bef76dac04f3b133608e517f8c9.ctex"]
+dest_files=["res://.godot/imported/unit_shield_red.png-443ab8f6d1362b090ed1e403a8294156.ctex"]
 
 [params]
 

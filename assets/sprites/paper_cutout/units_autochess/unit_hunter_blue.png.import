@@ -2,7 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/unit_hunter_blue.png-d2d3eff5f079cd7726a927b5eae68526.ctex"
+uid="uid://cjfhdwem3yic7"
+path="res://.godot/imported/unit_hunter_blue.png-94ce8072097409d3ea26ad4f39b2c3b0.ctex"
 metadata={
 "vram_texture": false
 }
@@ -10,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/paper_cutout/units_autochess/unit_hunter_blue.png"
-dest_files=["res://.godot/imported/unit_hunter_blue.png-d2d3eff5f079cd7726a927b5eae68526.ctex"]
+dest_files=["res://.godot/imported/unit_hunter_blue.png-94ce8072097409d3ea26ad4f39b2c3b0.ctex"]
 
 [params]
 

@@ -2,7 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/unit_rune_plate_blue.png-6fda59e85d67d0318e0d914454a7cef8.ctex"
+uid="uid://doynh8alq7ttv"
+path="res://.godot/imported/unit_rune_plate_blue.png-e3d5c403e60eabc4cbdcebba5e606b7b.ctex"
 metadata={
 "vram_texture": false
 }
@@ -10,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/paper_cutout/units_autochess/unit_rune_plate_blue.png"
-dest_files=["res://.godot/imported/unit_rune_plate_blue.png-6fda59e85d67d0318e0d914454a7cef8.ctex"]
+dest_files=["res://.godot/imported/unit_rune_plate_blue.png-e3d5c403e60eabc4cbdcebba5e606b7b.ctex"]
 
 [params]
 

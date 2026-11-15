@@ -2,7 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/unit_spear_goblin_blue.png-5efd1959e85a7c06a7cf7b6a0816da87.ctex"
+uid="uid://donvytqv08i0t"
+path="res://.godot/imported/unit_spear_goblin_blue.png-901c5e7aadf5f9956ce4994394bd4073.ctex"
 metadata={
 "vram_texture": false
 }
@@ -10,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/paper_cutout/units_autochess/unit_spear_goblin_blue.png"
-dest_files=["res://.godot/imported/unit_spear_goblin_blue.png-5efd1959e85a7c06a7cf7b6a0816da87.ctex"]
+dest_files=["res://.godot/imported/unit_spear_goblin_blue.png-901c5e7aadf5f9956ce4994394bd4073.ctex"]
 
 [params]
 

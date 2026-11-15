@@ -2,7 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/unit_axe_blue.png-94769d07fc053f066b5fb05605f96ce4.ctex"
+uid="uid://cpoymhglqqiob"
+path="res://.godot/imported/unit_axe_blue.png-38aabe198e6e8a209fa3d75f13b51612.ctex"
 metadata={
 "vram_texture": false
 }
@@ -10,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/paper_cutout/units_autochess/unit_axe_blue.png"
-dest_files=["res://.godot/imported/unit_axe_blue.png-94769d07fc053f066b5fb05605f96ce4.ctex"]
+dest_files=["res://.godot/imported/unit_axe_blue.png-38aabe198e6e8a209fa3d75f13b51612.ctex"]
 
 [params]
 

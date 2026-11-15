@@ -2,7 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/unit_wardrum_blue.png-72f8e14ee8d416e0525925ce2d606ab8.ctex"
+uid="uid://8f553y75nx8t"
+path="res://.godot/imported/unit_wardrum_blue.png-2cf94c641ab2b74aad5f60fe6f2f8e53.ctex"
 metadata={
 "vram_texture": false
 }
@@ -10,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/paper_cutout/units_autochess/unit_wardrum_blue.png"
-dest_files=["res://.godot/imported/unit_wardrum_blue.png-72f8e14ee8d416e0525925ce2d606ab8.ctex"]
+dest_files=["res://.godot/imported/unit_wardrum_blue.png-2cf94c641ab2b74aad5f60fe6f2f8e53.ctex"]
 
 [params]
 

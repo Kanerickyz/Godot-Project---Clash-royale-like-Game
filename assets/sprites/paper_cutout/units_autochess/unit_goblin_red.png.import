@@ -2,7 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/unit_goblin_red.png-f297d11f98de0051dd1b00aa567295e7.ctex"
+uid="uid://di6obxrhldjyw"
+path="res://.godot/imported/unit_goblin_red.png-54263588c3d2d222d0c80b466938424f.ctex"
 metadata={
 "vram_texture": false
 }
@@ -10,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/paper_cutout/units_autochess/unit_goblin_red.png"
-dest_files=["res://.godot/imported/unit_goblin_red.png-f297d11f98de0051dd1b00aa567295e7.ctex"]
+dest_files=["res://.godot/imported/unit_goblin_red.png-54263588c3d2d222d0c80b466938424f.ctex"]
 
 [params]
 

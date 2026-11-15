@@ -2,7 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/unit_soulcaller_red.png-28b9f46c12a58842356a9eee5b5be531.ctex"
+uid="uid://bifm2kc62ffkg"
+path="res://.godot/imported/unit_soulcaller_red.png-862c6ade2d7e74d86411810140362897.ctex"
 metadata={
 "vram_texture": false
 }
@@ -10,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/paper_cutout/units_autochess/unit_soulcaller_red.png"
-dest_files=["res://.godot/imported/unit_soulcaller_red.png-28b9f46c12a58842356a9eee5b5be531.ctex"]
+dest_files=["res://.godot/imported/unit_soulcaller_red.png-862c6ade2d7e74d86411810140362897.ctex"]
 
 [params]
 

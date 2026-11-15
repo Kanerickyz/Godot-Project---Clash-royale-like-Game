@@ -2,7 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/unit_spike_shield_red.png-81e9bc34b202c5bbbf06ee88a961db94.ctex"
+uid="uid://dxbnhgop4q8e7"
+path="res://.godot/imported/unit_spike_shield_red.png-bf4f0e6b841a911e54ddc443336f6158.ctex"
 metadata={
 "vram_texture": false
 }
@@ -10,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/paper_cutout/units_autochess/unit_spike_shield_red.png"
-dest_files=["res://.godot/imported/unit_spike_shield_red.png-81e9bc34b202c5bbbf06ee88a961db94.ctex"]
+dest_files=["res://.godot/imported/unit_spike_shield_red.png-bf4f0e6b841a911e54ddc443336f6158.ctex"]
 
 [params]
 

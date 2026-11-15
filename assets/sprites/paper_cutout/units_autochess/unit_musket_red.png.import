@@ -2,7 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/unit_musket_red.png-b1ff6060344425eb11115d3b078d29dc.ctex"
+uid="uid://u5mjptc1di2e"
+path="res://.godot/imported/unit_musket_red.png-909dd329f31432baf8f8c16111173aa6.ctex"
 metadata={
 "vram_texture": false
 }
@@ -10,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/paper_cutout/units_autochess/unit_musket_red.png"
-dest_files=["res://.godot/imported/unit_musket_red.png-b1ff6060344425eb11115d3b078d29dc.ctex"]
+dest_files=["res://.godot/imported/unit_musket_red.png-909dd329f31432baf8f8c16111173aa6.ctex"]
 
 [params]
 

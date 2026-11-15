@@ -2,7 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/unit_dirge_horn_blue.png-11b195ba08ae22c1840e54597fdb6021.ctex"
+uid="uid://bgvh0hkiidvao"
+path="res://.godot/imported/unit_dirge_horn_blue.png-f47737830e273c36b04aa0ae77b5feea.ctex"
 metadata={
 "vram_texture": false
 }
@@ -10,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/paper_cutout/units_autochess/unit_dirge_horn_blue.png"
-dest_files=["res://.godot/imported/unit_dirge_horn_blue.png-11b195ba08ae22c1840e54597fdb6021.ctex"]
+dest_files=["res://.godot/imported/unit_dirge_horn_blue.png-f47737830e273c36b04aa0ae77b5feea.ctex"]
 
 [params]
 

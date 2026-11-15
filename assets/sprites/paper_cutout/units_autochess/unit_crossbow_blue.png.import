@@ -2,7 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/unit_crossbow_blue.png-b35298044858618672477a06ff8a2c2e.ctex"
+uid="uid://b5smqbq61myem"
+path="res://.godot/imported/unit_crossbow_blue.png-e29bd1ac9f3fcb61b6528f7e5c6e5c34.ctex"
 metadata={
 "vram_texture": false
 }
@@ -10,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/paper_cutout/units_autochess/unit_crossbow_blue.png"
-dest_files=["res://.godot/imported/unit_crossbow_blue.png-b35298044858618672477a06ff8a2c2e.ctex"]
+dest_files=["res://.godot/imported/unit_crossbow_blue.png-e29bd1ac9f3fcb61b6528f7e5c6e5c34.ctex"]
 
 [params]
 

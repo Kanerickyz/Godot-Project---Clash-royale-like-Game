@@ -2,7 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/unit_banner_blue.png-8a2a1bbd3e4e2cd2b54782e929014217.ctex"
+uid="uid://cib3y1hs602mg"
+path="res://.godot/imported/unit_banner_blue.png-bf6bc0506d7d9017a6f399af08d5c618.ctex"
 metadata={
 "vram_texture": false
 }
@@ -10,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/paper_cutout/units_autochess/unit_banner_blue.png"
-dest_files=["res://.godot/imported/unit_banner_blue.png-8a2a1bbd3e4e2cd2b54782e929014217.ctex"]
+dest_files=["res://.godot/imported/unit_banner_blue.png-bf6bc0506d7d9017a6f399af08d5c618.ctex"]
 
 [params]
 

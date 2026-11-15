@@ -2,7 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/unit_horsebow_blue.png-49f76444604a20a11ca4f588b201dc1b.ctex"
+uid="uid://dugboi5a4x6ab"
+path="res://.godot/imported/unit_horsebow_blue.png-7a989642b2b6b9b394bb2aed8f3e7839.ctex"
 metadata={
 "vram_texture": false
 }
@@ -10,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/paper_cutout/units_autochess/unit_horsebow_blue.png"
-dest_files=["res://.godot/imported/unit_horsebow_blue.png-49f76444604a20a11ca4f588b201dc1b.ctex"]
+dest_files=["res://.godot/imported/unit_horsebow_blue.png-7a989642b2b6b9b394bb2aed8f3e7839.ctex"]
 
 [params]
 

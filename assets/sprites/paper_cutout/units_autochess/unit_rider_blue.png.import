@@ -2,7 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/unit_rider_blue.png-0cafea6c7fb9e9e5e5ccb52702e7f1b7.ctex"
+uid="uid://cvrlddfbf68qr"
+path="res://.godot/imported/unit_rider_blue.png-c689be92f750fc2ede1eae70571a18bd.ctex"
 metadata={
 "vram_texture": false
 }
@@ -10,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/paper_cutout/units_autochess/unit_rider_blue.png"
-dest_files=["res://.godot/imported/unit_rider_blue.png-0cafea6c7fb9e9e5e5ccb52702e7f1b7.ctex"]
+dest_files=["res://.godot/imported/unit_rider_blue.png-c689be92f750fc2ede1eae70571a18bd.ctex"]
 
 [params]
 

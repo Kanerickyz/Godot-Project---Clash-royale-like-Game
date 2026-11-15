@@ -2,7 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/unit_relic_aegis_blue.png-9e566e437b5141ad9c712d309c04b4ee.ctex"
+uid="uid://ww56y2cfg3o0"
+path="res://.godot/imported/unit_relic_aegis_blue.png-7306df2a12270d9b2462412497971155.ctex"
 metadata={
 "vram_texture": false
 }
@@ -10,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/paper_cutout/units_autochess/unit_relic_aegis_blue.png"
-dest_files=["res://.godot/imported/unit_relic_aegis_blue.png-9e566e437b5141ad9c712d309c04b4ee.ctex"]
+dest_files=["res://.godot/imported/unit_relic_aegis_blue.png-7306df2a12270d9b2462412497971155.ctex"]
 
 [params]
 

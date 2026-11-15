@@ -2,7 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/unit_gravewright_red.png-c1f2ad85ecbfe5cec5f031f16e91cdeb.ctex"
+uid="uid://lnbnk6a3q0nd"
+path="res://.godot/imported/unit_gravewright_red.png-a6ba2ebe423f4168f684626ee75c1bc0.ctex"
 metadata={
 "vram_texture": false
 }
@@ -10,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/paper_cutout/units_autochess/unit_gravewright_red.png"
-dest_files=["res://.godot/imported/unit_gravewright_red.png-c1f2ad85ecbfe5cec5f031f16e91cdeb.ctex"]
+dest_files=["res://.godot/imported/unit_gravewright_red.png-a6ba2ebe423f4168f684626ee75c1bc0.ctex"]
 
 [params]
 

@@ -2,7 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/unit_skeleton_red.png-92004e77c65481ece1b00e5bc64af1da.ctex"
+uid="uid://b1m8jwwwvkn4u"
+path="res://.godot/imported/unit_skeleton_red.png-d8ec1dd0676d652da487125eab3c3911.ctex"
 metadata={
 "vram_texture": false
 }
@@ -10,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/paper_cutout/units_autochess/unit_skeleton_red.png"
-dest_files=["res://.godot/imported/unit_skeleton_red.png-92004e77c65481ece1b00e5bc64af1da.ctex"]
+dest_files=["res://.godot/imported/unit_skeleton_red.png-d8ec1dd0676d652da487125eab3c3911.ctex"]
 
 [params]
 

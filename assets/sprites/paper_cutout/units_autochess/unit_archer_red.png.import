@@ -2,7 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-path="res://.godot/imported/unit_archer_red.png-dd6a41f9870277a8ca58103a66d09d74.ctex"
+uid="uid://lwb5gah0j71k"
+path="res://.godot/imported/unit_archer_red.png-b35eb94463376b0aa92e1a87375d72e5.ctex"
 metadata={
 "vram_texture": false
 }
@@ -10,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/sprites/paper_cutout/units_autochess/unit_archer_red.png"
-dest_files=["res://.godot/imported/unit_archer_red.png-dd6a41f9870277a8ca58103a66d09d74.ctex"]
+dest_files=["res://.godot/imported/unit_archer_red.png-b35eb94463376b0aa92e1a87375d72e5.ctex"]
 
 [params]
 
