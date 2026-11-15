@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1_script")
 map_size = Vector2(2800, 2200)
-camera_zoom = 1.5
+camera_zoom = 1.35
 room_count_min = 5
 room_count_max = 8
 room_size_min = Vector2(280, 220)

@@ -240,9 +240,10 @@ func _is_far_enough(point: Vector2, avoid: Array[Vector2], min_sep: float) -> bo
 
 func _add_room_label(parent: Node2D, room: Room) -> void:
 	var label := Label.new()
-	label.text = "SAFE" if room.is_safe else "BOSS"
+	# Boss room slot is the Phase A exit/portal room (no end-boss in this phase).
+	label.text = "SAFE" if room.is_safe else "EXIT"
 	label.position = room.center() + Vector2(-28, -room.rect.size.y * 0.42)
 	label.add_theme_font_size_override("font_size", 16)
-	label.modulate = Color(0.85, 0.95, 0.85, 0.7) if room.is_safe else Color(1.0, 0.7, 0.7, 0.75)
+	label.modulate = Color(0.85, 0.95, 0.85, 0.7) if room.is_safe else Color(0.7, 0.85, 1.0, 0.8)
 	label.z_index = 8
 	parent.add_child(label)

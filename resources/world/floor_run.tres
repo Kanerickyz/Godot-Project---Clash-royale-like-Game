@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="FloorRunConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/floor_run_config.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+starting_follower_paths = PackedStringArray("res://resources/units/ally_skeleton.tres", "res://resources/units/ally_spear.tres", "res://resources/units/ally_shield.tres")
+captain_path = "res://resources/units/captain.tres"
+enemy_path = "res://resources/units/enemy_grunt.tres"
+portal_interact_radius = 90.0
+portal_confirm_sec = 0.35
+assemble_duration = 2.5
+assemble_cooldown = 8.0
+assemble_follow_distance = 28.0
+rage_duration = 5.0
+rage_cooldown = 16.0
+rage_damage_mult = 1.5
+rage_speed_mult = 1.25

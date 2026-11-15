@@ -20,6 +20,9 @@ var team: Team = Team.ALLY
 var current_hp: int = 0
 var is_dead: bool = false
 var combat_enabled: bool = true
+## Temporary combat buffs (e.g. rage). Logic multipliers; presentation reads separately.
+var damage_multiplier: float = 1.0
+var speed_multiplier: float = 1.0
 
 var _attack_cd: float = 0.0
 var _stun_remaining: float = 0.0
@@ -89,7 +92,7 @@ func get_attack_range() -> float:
 func get_move_speed() -> float:
 	if definition == null:
 		return 0.0
-	return definition.move_speed
+	return definition.move_speed * maxf(0.05, speed_multiplier)
 
 
 func get_collision_radius() -> float:
@@ -225,7 +228,8 @@ func _try_auto_attack() -> void:
 	if target == null:
 		return
 	if target.has_method("take_damage"):
-		target.call("take_damage", definition.attack_damage)
+		var dmg := maxi(1, int(round(float(definition.attack_damage) * maxf(0.05, damage_multiplier))))
+		target.call("take_damage", dmg)
 	_mark_in_combat()
 	_play_attack_punch(target as Node2D)
 	_attack_cd = definition.attack_interval
