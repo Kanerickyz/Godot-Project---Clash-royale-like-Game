@@ -27,6 +27,9 @@ var rooms: Array[Room] = []
 var corridors: Array[Rect2] = []
 var safe_room: Room
 var boss_room: Room
+## Presentation: dungeon type id (crypt / aqueduct) and whether boss room is true final boss.
+var dungeon_type_id: String = "crypt"
+var is_final_boss_floor: bool = false
 
 
 func generate(cfg: WorldSpawnConfig, rng: RandomNumberGenerator) -> void:
@@ -43,12 +46,19 @@ func generate(cfg: WorldSpawnConfig, rng: RandomNumberGenerator) -> void:
 	_assign_special_rooms()
 
 
-func build_visuals(parent: Node2D, rng: RandomNumberGenerator = null) -> void:
+func build_visuals(
+	parent: Node2D,
+	rng: RandomNumberGenerator = null,
+	type_id: String = "crypt",
+	final_boss_floor: bool = false
+) -> void:
 	if parent == null:
 		return
 	if rng == null:
 		rng = RandomNumberGenerator.new()
 		rng.randomize()
+	dungeon_type_id = type_id if not type_id.is_empty() else "crypt"
+	is_final_boss_floor = final_boss_floor
 
 	var cols := maxi(1, int(ceili(map_size.x / float(TILE))))
 	var rows := maxi(1, int(ceili(map_size.y / float(TILE))))
@@ -239,11 +249,18 @@ func _is_far_enough(point: Vector2, avoid: Array[Vector2], min_sep: float) -> bo
 
 func _add_room_label(parent: Node2D, room: Room) -> void:
 	var label := Label.new()
-	# Boss room slot is the Phase A exit/portal room (no end-boss in this phase).
-	label.text = "SAFE" if room.is_safe else "EXIT"
+	# Non-final: boss-room slot is EXIT/portal. Final floor: true BOSS arena.
+	if room.is_safe:
+		label.text = "SAFE"
+		label.modulate = Color(0.85, 0.95, 0.85, 0.7)
+	elif is_final_boss_floor:
+		label.text = "BOSS"
+		label.modulate = Color(1.0, 0.55, 0.35, 0.9)
+	else:
+		label.text = "EXIT"
+		label.modulate = Color(0.7, 0.85, 1.0, 0.8)
 	label.position = room.center() + Vector2(-28, -room.rect.size.y * 0.42)
 	label.add_theme_font_size_override("font_size", 16)
-	label.modulate = Color(0.85, 0.95, 0.85, 0.7) if room.is_safe else Color(0.7, 0.85, 1.0, 0.8)
 	label.z_index = 8
 	parent.add_child(label)
 
@@ -291,7 +308,7 @@ func _add_atmosphere(parent: Node2D) -> void:
 	# Deep void under everything so gaps never flash grass.
 	var void_poly := Polygon2D.new()
 	void_poly.name = "DungeonVoid"
-	void_poly.color = Color(0.05, 0.04, 0.07, 1.0)
+	void_poly.color = DungeonTilesetFactory.void_color(dungeon_type_id)
 	void_poly.polygon = PackedVector2Array([
 		Vector2.ZERO,
 		Vector2(map_size.x, 0.0),
@@ -314,7 +331,7 @@ func _add_atmosphere(parent: Node2D) -> void:
 	var sx := map_size.x / float(tex.get_width())
 	var sy := map_size.y / float(tex.get_height())
 	bg.scale = Vector2(sx, sy)
-	bg.modulate = Color(0.22, 0.18, 0.28, 0.55)
+	bg.modulate = DungeonTilesetFactory.atmosphere_modulate(dungeon_type_id)
 	parent.add_child(bg)
 
 
@@ -325,7 +342,7 @@ func _paint_dungeon_layers(
 	rows: int,
 	rng: RandomNumberGenerator
 ) -> void:
-	var dungeon_set := DungeonTilesetFactory.build_tileset()
+	var dungeon_set := DungeonTilesetFactory.build_tileset(dungeon_type_id)
 	# Cleaned props: campfire/rocks without baked grass fringe.
 	var prop_set := OverworldTilesetFactory.build_clean_prop_tileset()
 

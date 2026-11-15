@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="OathDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/oath_definition.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"iron_wall"
+display_name = "铁壁誓约"
+keyword = &"先锋"
+thresholds = PackedInt32Array(2, 4)
+effect_kind = 0
+scope = 0
+tier_primary = PackedFloat32Array(0.12, 0.22)
+tier_secondary = PackedFloat32Array(0, 0)

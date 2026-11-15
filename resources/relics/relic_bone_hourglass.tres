@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="RelicDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/relic_definition.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"bone_hourglass"
+display_name = "骨沙漏"
+description = "复活时间缩短 20%"
+price = 5
+effect_kind = 0
+effect_value = 0.2

@@ -1,33 +1,53 @@
 class_name GameHud
 extends CanvasLayer
-## Phase B HUD: threat/floor/ducats, interstitial shop (buy/refresh/level/sell), end screen.
+## Phase G HUD: character select + skill tree + settlement skill points; keeps A–F panels.
 
 
 signal shop_buy_pressed(slot_index: int)
 signal shop_refresh_pressed
 signal shop_upgrade_pressed
 signal shop_sell_pressed(follower_index: int)
+signal relic_buy_pressed(slot_index: int)
+signal relic_refresh_pressed
+signal shrine_choice_pressed(choice_index: int)
+signal shrine_interact_pressed
 signal shop_closed
 signal chest_pick_pressed(choice_index: int)
 signal restart_pressed
+signal main_menu_pressed
 signal assemble_pressed
 signal rage_pressed
 signal portal_confirm_pressed
 signal next_floor_pressed
+signal character_confirm_pressed(character_id: StringName)
+signal character_row_pressed(character_id: StringName)
+signal skill_buy_pressed(node_id: StringName)
+signal meta_panel_open_pressed
 
 ## Presentation range for threat bar fill (matches ThreatConfig defaults; not a formula change).
 const THREAT_BAR_MIN := 1.0
 const THREAT_BAR_MAX := 2.5
 
 var gold: int = 0
+var corpus: int = 0
 
 var _root: Control
 var _gold_label: Label
+var _corpus_label: Label
 var _threat_label: Label
 var _threat_bar: ProgressBar
 var _threat_bar_fill: StyleBoxFlat
 var _floor_label: Label
 var _hint_label: Label
+var _revive_panel: PanelContainer
+var _revive_title: Label
+var _revive_list: VBoxContainer
+var _oath_panel: PanelContainer
+var _oath_title: Label
+var _oath_list: VBoxContainer
+var _relic_panel: PanelContainer
+var _relic_title: Label
+var _relic_list: VBoxContainer
 var _shop_panel: PanelContainer
 var _shop_title: Label
 var _shop_status: Label
@@ -36,27 +56,48 @@ var _shop_army_list: VBoxContainer
 var _shop_refresh_btn: Button
 var _shop_upgrade_btn: Button
 var _shop_next_btn: Button
+var _relic_shop_status: Label
+var _relic_shop_list: VBoxContainer
+var _relic_refresh_btn: Button
+var _owned_relic_list: VBoxContainer
 var _chest_panel: PanelContainer
 var _chest_list: HBoxContainer
+var _shrine_panel: PanelContainer
+var _shrine_title: Label
 var _end_panel: PanelContainer
 var _end_label: Label
+var _end_stats_label: Label
 var _interstitial_panel: PanelContainer
 var _interstitial_label: Label
 var _cmd_row: HBoxContainer
 var _assemble_btn: Button
 var _rage_btn: Button
 var _portal_btn: Button
+var _shrine_btn: Button
 var _joystick: VirtualJoystick
+var _meta_summary_label: Label
+var _meta_open_btn: Button
+var _character_panel: PanelContainer
+var _character_title: Label
+var _character_status: Label
+var _character_list: VBoxContainer
+var _skill_list: VBoxContainer
+var _character_confirm_btn: Button
+var _character_close_btn: Button
+var _pending_character_id: StringName = &""
+var _character_gate_mode: bool = false
 
 
 func _ready() -> void:
 	layer = 20
 	_build_ui()
 	refresh_gold(gold)
+	refresh_corpus(corpus)
 	refresh_threat(1.0, "平静", 0)
 	refresh_floor(1)
 	set_command_cooldowns(0.0, 0.0, 0.0, 0.0)
 	set_portal_prompt_visible(false)
+	set_shrine_prompt_visible(false)
 
 
 func get_joystick_vector() -> Vector2:
@@ -69,6 +110,12 @@ func refresh_gold(amount: int) -> void:
 	gold = amount
 	if _gold_label != null:
 		_gold_label.text = "达克特: %d" % gold
+
+
+func refresh_corpus(amount: int) -> void:
+	corpus = amount
+	if _corpus_label != null:
+		_corpus_label.text = "尸骸: %d" % corpus
 
 
 func refresh_threat(multiplier: float, tier_label: String, tier_index: int) -> void:
@@ -87,9 +134,18 @@ func refresh_threat(multiplier: float, tier_label: String, tier_index: int) -> v
 		_threat_bar.modulate = Color(1, 1, 1, 1)
 
 
-func refresh_floor(floor_index: int) -> void:
-	if _floor_label != null:
-		_floor_label.text = "第 %d 层" % maxi(1, floor_index)
+func refresh_floor(floor_index: int, total_floors: int = 0, dungeon_label: String = "") -> void:
+	if _floor_label == null:
+		return
+	var fi := maxi(1, floor_index)
+	var text := "第 %d 层" % fi
+	if total_floors > 0:
+		text = "第 %d/%d 层" % [fi, total_floors]
+		if total_floors > 0 and fi >= total_floors:
+			text += " · 终局"
+	if not dungeon_label.is_empty():
+		text += " · %s" % dungeon_label
+	_floor_label.text = text
 
 
 func set_command_cooldowns(
@@ -122,6 +178,11 @@ func set_portal_prompt_visible(visible_on: bool) -> void:
 		_portal_btn.visible = visible_on
 
 
+func set_shrine_prompt_visible(visible_on: bool) -> void:
+	if _shrine_btn != null:
+		_shrine_btn.visible = visible_on
+
+
 func show_interstitial(floor_cleared: int) -> void:
 	# Legacy stub path: prefer show_shop_interstitial from GameController.
 	if _interstitial_label != null:
@@ -150,27 +211,40 @@ func show_shop_interstitial(
 	army_rows: Array,
 	type_count: int,
 	type_cap: int,
-	status_text: String = ""
+	status_text: String = "",
+	current_corpus: int = 0,
+	relic_shelf: Array = [],
+	relic_refresh_cost: int = 2,
+	owned_relics: Array = [],
+	relic_max_slots: int = 3,
+	relic_status_text: String = ""
 ) -> void:
 	refresh_gold(current_gold)
+	refresh_corpus(current_corpus)
+	refresh_relics(owned_relics, relic_max_slots)
 	if _interstitial_panel != null:
 		_interstitial_panel.visible = false
 	if _chest_panel != null:
 		_chest_panel.visible = false
+	if _shrine_panel != null:
+		_shrine_panel.visible = false
 	if _end_panel != null:
 		_end_panel.visible = false
 	if _cmd_row != null:
 		_cmd_row.visible = false
 	set_portal_prompt_visible(false)
+	set_shrine_prompt_visible(false)
 	if _shop_title != null:
 		var interest_line := ""
 		if interest_gained > 0:
 			interest_line = " · 利息 +%d" % interest_gained
 		elif interest_gained == 0:
 			interest_line = " · 利息 +0"
-		_shop_title.text = "第 %d 层后 · 招兵店%s" % [floor_cleared, interest_line]
+		_shop_title.text = "第 %d 层后 · 招兵/遗物%s" % [floor_cleared, interest_line]
 	_rebuild_shop_shelf(shelf, current_gold)
 	_rebuild_shop_army(army_rows)
+	_rebuild_relic_shelf(relic_shelf, current_corpus, owned_relics.size(), relic_max_slots)
+	_rebuild_owned_relics(owned_relics, relic_max_slots)
 	if _shop_refresh_btn != null:
 		_shop_refresh_btn.text = "刷新 (-%d)" % maxi(0, refresh_cost)
 		_shop_refresh_btn.disabled = current_gold < refresh_cost
@@ -181,11 +255,21 @@ func show_shop_interstitial(
 		else:
 			_shop_upgrade_btn.text = "招募等级 Lv%d → (-%d)" % [recruit_level, upgrade_cost]
 			_shop_upgrade_btn.disabled = current_gold < upgrade_cost
+	if _relic_refresh_btn != null:
+		_relic_refresh_btn.text = "刷新遗物 (-%d尸骸)" % maxi(0, relic_refresh_cost)
+		_relic_refresh_btn.disabled = current_corpus < relic_refresh_cost
 	if _shop_status != null:
-		var base := "种类 %d/%d" % [type_count, type_cap]
+		var base := "种类 %d/%d · 达克特 %d · 尸骸 %d" % [
+			type_count, type_cap, current_gold, current_corpus,
+		]
 		if status_text != "":
 			base = "%s · %s" % [base, status_text]
 		_shop_status.text = base
+	if _relic_shop_status != null:
+		var rbase := "遗物槽 %d/%d" % [owned_relics.size(), relic_max_slots]
+		if relic_status_text != "":
+			rbase = "%s · %s" % [rbase, relic_status_text]
+		_relic_shop_status.text = rbase
 	if _shop_panel != null:
 		_shop_panel.visible = true
 
@@ -195,6 +279,8 @@ func hide_interstitial() -> void:
 		_interstitial_panel.visible = false
 	if _shop_panel != null:
 		_shop_panel.visible = false
+	if _shrine_panel != null:
+		_shrine_panel.visible = false
 	if _cmd_row != null:
 		_cmd_row.visible = true
 
@@ -233,17 +319,180 @@ func hide_chest_pick() -> void:
 		_chest_panel.visible = false
 
 
-func show_end(won: bool) -> void:
+func show_end(won: bool, stats: Dictionary = {}) -> void:
 	if _end_label != null:
-		_end_label.text = "胜利（占位）" if won else "失败…指挥官阵亡"
+		_end_label.text = "胜利！终局 Boss 已击败" if won else "失败…指挥官阵亡"
+		_end_label.add_theme_color_override(
+			"font_color",
+			Color(0.95, 0.86, 0.45, 1.0) if won else Color(1.0, 0.55, 0.5, 1.0)
+		)
+	if _end_stats_label != null:
+		var floors_reached := int(stats.get("floors_reached", stats.get("floor_index", 1)))
+		var total := int(stats.get("total_floors", 0))
+		var ducats := int(stats.get("ducats", 0))
+		var corpus_amt := int(stats.get("corpus", 0))
+		var dungeon := str(stats.get("dungeon_label", ""))
+		var awarded := int(stats.get("awarded_skill_points", 0))
+		var sp_bal := int(stats.get("skill_points", 0))
+		var char_id := str(stats.get("selected_character_id", ""))
+		var floor_line := "层数：%d" % floors_reached
+		if total > 0:
+			floor_line = "层数：%d / %d" % [floors_reached, total]
+		var lines: PackedStringArray = PackedStringArray([
+			floor_line,
+			"达克特：%d" % ducats,
+			"尸骸：%d" % corpus_amt,
+			"技能点 +%d（余额 %d）" % [awarded, sp_bal],
+		])
+		if not dungeon.is_empty():
+			lines.append("地城：%s" % dungeon)
+		if not char_id.is_empty():
+			lines.append("角色：%s" % char_id)
+		var unlocks: Array = stats.get("new_unlocks", [])
+		if unlocks is Array and not unlocks.is_empty():
+			lines.append("新解锁：%s" % ", ".join(PackedStringArray(unlocks)))
+		_end_stats_label.text = "\n".join(lines)
 	if _end_panel != null:
 		_end_panel.visible = true
 	hide_shop()
 	hide_chest_pick()
 	hide_interstitial()
+	hide_shrine_choice()
+	hide_character_select()
 	if _cmd_row != null:
 		_cmd_row.visible = false
 	set_portal_prompt_visible(false)
+	set_shrine_prompt_visible(false)
+
+
+func refresh_meta_summary(skill_points: int, character_id: String, characters: Array = []) -> void:
+	if _meta_summary_label != null:
+		var name_str := character_id if not character_id.is_empty() else "—"
+		for row in characters:
+			if typeof(row) != TYPE_DICTIONARY:
+				continue
+			if str(row.get("id", "")) == character_id:
+				name_str = str(row.get("display_name", character_id))
+				break
+		_meta_summary_label.text = "技能点:%d · %s" % [skill_points, name_str]
+
+
+func show_character_select(
+	characters: Array,
+	skill_nodes: Array,
+	skill_points: int,
+	gate_run_start: bool = true
+) -> void:
+	_character_gate_mode = gate_run_start
+	if _character_panel != null:
+		_character_panel.visible = true
+	if _character_title != null:
+		_character_title.text = "开局选角" if gate_run_start else "局外成长"
+	if _character_confirm_btn != null:
+		_character_confirm_btn.text = "出征" if gate_run_start else "选定（下局生效）"
+		_character_confirm_btn.visible = true
+	if _character_close_btn != null:
+		_character_close_btn.visible = not gate_run_start
+	refresh_character_select(characters, skill_nodes, skill_points, "")
+
+
+func refresh_character_select(
+	characters: Array,
+	skill_nodes: Array,
+	skill_points: int,
+	status_text: String = ""
+) -> void:
+	if _character_status != null:
+		if status_text.is_empty():
+			_character_status.text = "技能点余额：%d" % skill_points
+		else:
+			_character_status.text = "%s · 技能点：%d" % [status_text, skill_points]
+		_character_status.add_theme_color_override(
+			"font_color",
+			Color(1.0, 0.7, 0.55, 1.0) if not status_text.is_empty() else Color(0.82, 0.86, 0.92, 1.0)
+		)
+	if _character_list != null:
+		for child in _character_list.get_children():
+			_character_list.remove_child(child)
+			child.queue_free()
+		for row_data in characters:
+			if typeof(row_data) != TYPE_DICTIONARY:
+				continue
+			var info: Dictionary = row_data
+			var cid := StringName(str(info.get("id", "")))
+			var unlocked := bool(info.get("unlocked", false))
+			var selected := bool(info.get("selected", false))
+			if selected:
+				_pending_character_id = cid
+			var btn := Button.new()
+			var label := str(info.get("display_name", cid))
+			if unlocked:
+				btn.text = ("%s  ✓" % label) if selected else label
+			else:
+				# Lock reason always visible on the row (L3+).
+				btn.text = "%s  [锁定] %s" % [label, str(info.get("lock_reason", "未解锁"))]
+			btn.disabled = false
+			btn.custom_minimum_size = Vector2(0, 40)
+			btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			btn.pressed.connect(_on_character_row_pressed.bind(cid))
+			_character_list.add_child(btn)
+	if _skill_list != null:
+		for child in _skill_list.get_children():
+			_skill_list.remove_child(child)
+			child.queue_free()
+		var head := Label.new()
+		head.text = "技能树"
+		head.add_theme_font_size_override("font_size", 14)
+		_skill_list.add_child(head)
+		for node_data in skill_nodes:
+			if typeof(node_data) != TYPE_DICTIONARY:
+				continue
+			var node: Dictionary = node_data
+			var nid := StringName(str(node.get("id", "")))
+			var owned := bool(node.get("owned", false))
+			var can_buy := bool(node.get("can_buy", false))
+			var btn2 := Button.new()
+			var cost := int(node.get("cost", 0))
+			var title := str(node.get("display_name", nid))
+			if owned:
+				btn2.text = "%s  已购" % title
+				btn2.disabled = true
+			elif can_buy:
+				btn2.text = "%s  (%d点)" % [title, cost]
+				btn2.disabled = false
+				btn2.pressed.connect(func() -> void: skill_buy_pressed.emit(nid))
+			else:
+				btn2.text = "%s  [%s]" % [title, str(node.get("block_reason", "不可用"))]
+				btn2.disabled = true
+			btn2.custom_minimum_size = Vector2(0, 36)
+			btn2.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			_skill_list.add_child(btn2)
+
+
+func hide_character_select() -> void:
+	if _character_panel != null:
+		_character_panel.visible = false
+
+
+func is_character_select_visible() -> bool:
+	return _character_panel != null and _character_panel.visible
+
+
+func get_pending_character_id() -> StringName:
+	return _pending_character_id
+
+
+func set_pending_character_id(character_id: StringName) -> void:
+	_pending_character_id = character_id
+	if _character_confirm_btn != null:
+		_character_confirm_btn.disabled = character_id == &""
+
+
+func _on_character_row_pressed(character_id: StringName) -> void:
+	_pending_character_id = character_id
+	if _character_confirm_btn != null:
+		_character_confirm_btn.disabled = character_id == &""
+	character_row_pressed.emit(character_id)
 
 
 func set_world_hint(text: String) -> void:
@@ -254,6 +503,132 @@ func set_world_hint(text: String) -> void:
 func set_shop_status(text: String) -> void:
 	if _shop_status != null:
 		_shop_status.text = text
+
+
+func refresh_revive_queue(rows: Array) -> void:
+	if _revive_list == null:
+		return
+	for child in _revive_list.get_children():
+		_revive_list.remove_child(child)
+		child.queue_free()
+	if _revive_panel != null:
+		_revive_panel.visible = true
+	if _revive_title != null:
+		_revive_title.text = "复活队列 (%d)" % rows.size()
+	if rows.is_empty():
+		var empty := Label.new()
+		empty.text = "（空）"
+		empty.add_theme_font_size_override("font_size", 12)
+		_revive_list.add_child(empty)
+		return
+	for row_data in rows:
+		var info: Dictionary = row_data
+		var name_str := str(info.get("name", "?"))
+		var rank_lbl := str(info.get("rank_label", ""))
+		var rem := float(info.get("remaining", 0.0))
+		var kw := StringName(str(info.get("keyword", &"")))
+		var rank_i := int(info.get("rank", 0))
+		var line := "%s·%s  %.0fs" % [rank_lbl, name_str, ceil(rem)]
+		if rank_i >= 2 and kw != &"":
+			line = "%s·%s[%s]  %.0fs" % [rank_lbl, name_str, String(kw), ceil(rem)]
+		var lbl := Label.new()
+		lbl.text = line
+		lbl.add_theme_font_size_override("font_size", 12)
+		lbl.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.1, 0.85))
+		lbl.add_theme_constant_override("outline_size", 2)
+		_revive_list.add_child(lbl)
+
+
+func refresh_relics(rows: Array, max_slots: int = 3) -> void:
+	if _relic_list == null:
+		return
+	for child in _relic_list.get_children():
+		_relic_list.remove_child(child)
+		child.queue_free()
+	if _relic_panel != null:
+		_relic_panel.visible = true
+	if _relic_title != null:
+		_relic_title.text = "遗物 (%d/%d)" % [rows.size(), maxi(1, max_slots)]
+	if rows.is_empty():
+		var empty := Label.new()
+		empty.text = "（空）"
+		empty.add_theme_font_size_override("font_size", 12)
+		_relic_list.add_child(empty)
+		return
+	for row_data in rows:
+		var info: Dictionary = row_data
+		var name_str := str(info.get("name", "?"))
+		var desc := str(info.get("description", ""))
+		var line := name_str if desc == "" else "%s · %s" % [name_str, desc]
+		var lbl := Label.new()
+		lbl.text = line
+		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		lbl.add_theme_font_size_override("font_size", 12)
+		lbl.add_theme_color_override("font_color", Color(0.88, 0.82, 0.95, 1.0))
+		lbl.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.1, 0.85))
+		lbl.add_theme_constant_override("outline_size", 2)
+		_relic_list.add_child(lbl)
+
+
+func show_shrine_choice(title_text: String = "神龛") -> void:
+	if _shrine_title != null:
+		_shrine_title.text = title_text
+	if _shrine_panel != null:
+		_shrine_panel.visible = true
+	if _cmd_row != null:
+		_cmd_row.visible = false
+	set_shrine_prompt_visible(false)
+
+
+func hide_shrine_choice() -> void:
+	if _shrine_panel != null:
+		_shrine_panel.visible = false
+	if _cmd_row != null and (_shop_panel == null or not _shop_panel.visible) and (
+		_end_panel == null or not _end_panel.visible
+	):
+		_cmd_row.visible = true
+
+
+func refresh_oaths(rows: Array) -> void:
+	if _oath_list == null:
+		return
+	for child in _oath_list.get_children():
+		_oath_list.remove_child(child)
+		child.queue_free()
+	if _oath_panel != null:
+		_oath_panel.visible = true
+	var lit_n := 0
+	for row_data in rows:
+		if bool((row_data as Dictionary).get("lit", false)):
+			lit_n += 1
+	if _oath_title != null:
+		_oath_title.text = "誓约 (%d 点亮)" % lit_n
+	if rows.is_empty():
+		var empty := Label.new()
+		empty.text = "（无）"
+		empty.add_theme_font_size_override("font_size", 12)
+		_oath_list.add_child(empty)
+		return
+	for row_data in rows:
+		var info: Dictionary = row_data
+		var name_str := str(info.get("name", "?"))
+		var kw := String(info.get("keyword", ""))
+		var count := int(info.get("count", 0))
+		var tier := int(info.get("tier", 0))
+		var next_need := int(info.get("next_threshold", 2))
+		var lit := bool(info.get("lit", false))
+		var status := "熄灭" if not lit else ("T%d" % tier)
+		var line := "%s[%s] %s %d/%d" % [name_str, kw, status, count, next_need]
+		var lbl := Label.new()
+		lbl.text = line
+		lbl.add_theme_font_size_override("font_size", 12)
+		if lit:
+			lbl.add_theme_color_override("font_color", Color(0.95, 0.86, 0.45, 1.0))
+		else:
+			lbl.add_theme_color_override("font_color", Color(0.72, 0.76, 0.82, 1.0))
+		lbl.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.1, 0.85))
+		lbl.add_theme_constant_override("outline_size", 2)
+		_oath_list.add_child(lbl)
 
 
 func _threat_tier_color(tier_index: int) -> Color:
@@ -343,6 +718,81 @@ func _rebuild_shop_army(army_rows: Array) -> void:
 		_shop_army_list.add_child(row)
 
 
+func _rebuild_relic_shelf(
+	shelf: Array,
+	current_corpus: int,
+	owned_count: int,
+	max_slots: int
+) -> void:
+	if _relic_shop_list == null:
+		return
+	for child in _relic_shop_list.get_children():
+		_relic_shop_list.remove_child(child)
+		child.queue_free()
+	if shelf.is_empty():
+		var empty := Label.new()
+		empty.text = "遗物货架空"
+		_relic_shop_list.add_child(empty)
+		return
+	var slots_full := owned_count >= max_slots
+	for i in shelf.size():
+		var slot: Dictionary = shelf[i]
+		var relic: RelicDefinition = slot.get("relic") as RelicDefinition
+		var price := int(slot.get("price", 0))
+		var sold := bool(slot.get("sold_out", false))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		var name_lbl := Label.new()
+		var relic_name := relic.display_name if relic != null else "?"
+		var desc := relic.description if relic != null else ""
+		name_lbl.text = "[%d] %s · %d尸骸" % [i + 1, relic_name, price]
+		if desc != "":
+			name_lbl.text += "\n  %s" % desc
+		name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(name_lbl)
+		var buy := Button.new()
+		buy.custom_minimum_size = Vector2(96, 36)
+		if sold:
+			buy.text = "已购"
+			buy.disabled = true
+		elif slots_full:
+			buy.text = "槽满"
+			buy.disabled = true
+		elif current_corpus < price:
+			buy.text = "尸骸不够"
+			buy.disabled = true
+		else:
+			buy.text = "购买"
+			buy.disabled = false
+		var slot_i := i
+		buy.pressed.connect(func() -> void: relic_buy_pressed.emit(slot_i))
+		row.add_child(buy)
+		_relic_shop_list.add_child(row)
+
+
+func _rebuild_owned_relics(owned_relics: Array, max_slots: int) -> void:
+	if _owned_relic_list == null:
+		return
+	for child in _owned_relic_list.get_children():
+		_owned_relic_list.remove_child(child)
+		child.queue_free()
+	var header := Label.new()
+	header.text = "持有遗物 (%d/%d)" % [owned_relics.size(), maxi(1, max_slots)]
+	_owned_relic_list.add_child(header)
+	if owned_relics.is_empty():
+		var empty := Label.new()
+		empty.text = "尚未持有遗物"
+		_owned_relic_list.add_child(empty)
+		return
+	for row_data in owned_relics:
+		var info: Dictionary = row_data
+		var lbl := Label.new()
+		lbl.text = "- %s" % str(info.get("name", "?"))
+		lbl.add_theme_font_size_override("font_size", 12)
+		_owned_relic_list.add_child(lbl)
+
+
 func _build_ui() -> void:
 	_root = Control.new()
 	_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -404,13 +854,50 @@ func _build_ui() -> void:
 	_gold_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	_gold_label.offset_left = 16
 	_gold_label.offset_top = 86
-	_gold_label.offset_right = -16
+	_gold_label.offset_right = -220
 	_gold_label.offset_bottom = 112
 	_gold_label.add_theme_font_size_override("font_size", 15)
 	_gold_label.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.1, 0.85))
 	_gold_label.add_theme_constant_override("outline_size", 2)
 	_gold_label.text = "达克特: 0"
 	_root.add_child(_gold_label)
+
+	_corpus_label = Label.new()
+	_corpus_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_corpus_label.offset_left = 200
+	_corpus_label.offset_top = 86
+	_corpus_label.offset_right = -16
+	_corpus_label.offset_bottom = 112
+	_corpus_label.add_theme_font_size_override("font_size", 15)
+	_corpus_label.add_theme_color_override("font_color", Color(0.88, 0.82, 0.95, 1.0))
+	_corpus_label.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.1, 0.85))
+	_corpus_label.add_theme_constant_override("outline_size", 2)
+	_corpus_label.text = "尸骸: 0"
+	_root.add_child(_corpus_label)
+
+	_meta_summary_label = Label.new()
+	_meta_summary_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_meta_summary_label.offset_left = -360
+	_meta_summary_label.offset_right = -100
+	_meta_summary_label.offset_top = 86
+	_meta_summary_label.offset_bottom = 112
+	_meta_summary_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_meta_summary_label.add_theme_font_size_override("font_size", 14)
+	_meta_summary_label.add_theme_color_override("font_color", Color(0.75, 0.9, 0.82, 1.0))
+	_meta_summary_label.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.1, 0.85))
+	_meta_summary_label.add_theme_constant_override("outline_size", 2)
+	_meta_summary_label.text = "技能点:0"
+	_root.add_child(_meta_summary_label)
+
+	_meta_open_btn = Button.new()
+	_meta_open_btn.text = "成长"
+	_meta_open_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_meta_open_btn.offset_left = -96
+	_meta_open_btn.offset_right = -12
+	_meta_open_btn.offset_top = 82
+	_meta_open_btn.offset_bottom = 114
+	_meta_open_btn.pressed.connect(func() -> void: meta_panel_open_pressed.emit())
+	_root.add_child(_meta_open_btn)
 
 	_hint_label = Label.new()
 	_hint_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
@@ -422,12 +909,116 @@ func _build_ui() -> void:
 	_hint_label.add_theme_font_size_override("font_size", 12)
 	_hint_label.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.1, 0.8))
 	_hint_label.add_theme_constant_override("outline_size", 2)
-	_hint_label.text = "WASD/摇杆移动 · Q集合 · R怒意 · 靠近传送门确认进层"
+	_hint_label.text = "WASD/摇杆移动 · Q集合 · R怒意 · 靠近传送门/神龛"
 	_root.add_child(_hint_label)
 
 	_joystick = VirtualJoystick.new()
 	_joystick.name = "VirtualJoystick"
 	_root.add_child(_joystick)
+
+	# Phase C: revive queue, bottom-left (above command row / joystick).
+	_revive_panel = PanelContainer.new()
+	_revive_panel.name = "ReviveQueuePanel"
+	_revive_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_revive_panel.offset_left = 12
+	_revive_panel.offset_right = 260
+	_revive_panel.offset_top = -320
+	_revive_panel.offset_bottom = -220
+	_revive_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var revive_style := StyleBoxFlat.new()
+	revive_style.bg_color = Color(0.08, 0.1, 0.14, 0.82)
+	revive_style.border_color = Color(0.65, 0.72, 0.85, 0.9)
+	revive_style.set_border_width_all(1)
+	revive_style.set_content_margin_all(8)
+	revive_style.set_corner_radius_all(6)
+	_revive_panel.add_theme_stylebox_override("panel", revive_style)
+	_root.add_child(_revive_panel)
+	var revive_v := VBoxContainer.new()
+	revive_v.add_theme_constant_override("separation", 2)
+	_revive_panel.add_child(revive_v)
+	_revive_title = Label.new()
+	_revive_title.text = "复活队列 (0)"
+	_revive_title.add_theme_font_size_override("font_size", 13)
+	_revive_title.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.1, 0.9))
+	_revive_title.add_theme_constant_override("outline_size", 2)
+	revive_v.add_child(_revive_title)
+	_revive_list = VBoxContainer.new()
+	_revive_list.add_theme_constant_override("separation", 1)
+	revive_v.add_child(_revive_list)
+	var empty_q := Label.new()
+	empty_q.text = "（空）"
+	empty_q.add_theme_font_size_override("font_size", 12)
+	_revive_list.add_child(empty_q)
+
+	# Phase D: oath progress, top-right under floor/threat.
+	_oath_panel = PanelContainer.new()
+	_oath_panel.name = "OathPanel"
+	_oath_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_oath_panel.offset_left = -280
+	_oath_panel.offset_right = -12
+	_oath_panel.offset_top = 96
+	_oath_panel.offset_bottom = 210
+	_oath_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var oath_style := StyleBoxFlat.new()
+	oath_style.bg_color = Color(0.1, 0.09, 0.12, 0.84)
+	oath_style.border_color = Color(0.85, 0.72, 0.35, 0.95)
+	oath_style.set_border_width_all(1)
+	oath_style.set_content_margin_all(8)
+	oath_style.set_corner_radius_all(6)
+	_oath_panel.add_theme_stylebox_override("panel", oath_style)
+	_root.add_child(_oath_panel)
+	var oath_v := VBoxContainer.new()
+	oath_v.add_theme_constant_override("separation", 2)
+	_oath_panel.add_child(oath_v)
+	_oath_title = Label.new()
+	_oath_title.text = "誓约 (0 点亮)"
+	_oath_title.add_theme_font_size_override("font_size", 13)
+	_oath_title.add_theme_color_override("font_color", Color(0.95, 0.86, 0.45, 1.0))
+	_oath_title.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.1, 0.9))
+	_oath_title.add_theme_constant_override("outline_size", 2)
+	oath_v.add_child(_oath_title)
+	_oath_list = VBoxContainer.new()
+	_oath_list.add_theme_constant_override("separation", 1)
+	oath_v.add_child(_oath_list)
+	var empty_o := Label.new()
+	empty_o.text = "（无）"
+	empty_o.add_theme_font_size_override("font_size", 12)
+	_oath_list.add_child(empty_o)
+
+	# Phase E: relic inventory under oaths.
+	_relic_panel = PanelContainer.new()
+	_relic_panel.name = "RelicPanel"
+	_relic_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_relic_panel.offset_left = -280
+	_relic_panel.offset_right = -12
+	_relic_panel.offset_top = 218
+	_relic_panel.offset_bottom = 330
+	_relic_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var relic_style := StyleBoxFlat.new()
+	relic_style.bg_color = Color(0.1, 0.09, 0.14, 0.84)
+	relic_style.border_color = Color(0.72, 0.65, 0.88, 0.95)
+	relic_style.set_border_width_all(1)
+	relic_style.set_content_margin_all(8)
+	relic_style.set_corner_radius_all(6)
+	_relic_panel.add_theme_stylebox_override("panel", relic_style)
+	_root.add_child(_relic_panel)
+	var relic_v := VBoxContainer.new()
+	relic_v.add_theme_constant_override("separation", 2)
+	_relic_panel.add_child(relic_v)
+	_relic_title = Label.new()
+	_relic_title.text = "遗物 (0/3)"
+	_relic_title.add_theme_font_size_override("font_size", 13)
+	_relic_title.add_theme_color_override("font_color", Color(0.88, 0.82, 0.95, 1.0))
+	_relic_title.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.1, 0.9))
+	_relic_title.add_theme_constant_override("outline_size", 2)
+	relic_v.add_child(_relic_title)
+	_relic_list = VBoxContainer.new()
+	_relic_list.add_theme_constant_override("separation", 1)
+	relic_v.add_child(_relic_list)
+	var empty_r := Label.new()
+	empty_r.text = "（空）"
+	empty_r.add_theme_font_size_override("font_size", 12)
+	_relic_list.add_child(empty_r)
 
 	_cmd_row = HBoxContainer.new()
 	_cmd_row.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
@@ -458,13 +1049,20 @@ func _build_ui() -> void:
 	_portal_btn.pressed.connect(func() -> void: portal_confirm_pressed.emit())
 	_cmd_row.add_child(_portal_btn)
 
-	# Phase B shop panel (interstitial).
-	_shop_panel = _make_centered_panel(Vector2(520, 560))
+	_shrine_btn = Button.new()
+	_shrine_btn.text = "祈愿神龛 (E)"
+	_shrine_btn.custom_minimum_size = Vector2(160, 48)
+	_shrine_btn.visible = false
+	_shrine_btn.pressed.connect(func() -> void: shrine_interact_pressed.emit())
+	_cmd_row.add_child(_shrine_btn)
+
+	# Phase B/E shop panel (interstitial: ducats + corpus relics).
+	_shop_panel = _make_centered_panel(Vector2(560, 640))
 	_shop_panel.visible = false
 	_root.add_child(_shop_panel)
 	var shop_scroll := ScrollContainer.new()
 	shop_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	shop_scroll.custom_minimum_size = Vector2(480, 520)
+	shop_scroll.custom_minimum_size = Vector2(520, 600)
 	_shop_panel.add_child(shop_scroll)
 	var shop_v := VBoxContainer.new()
 	shop_v.add_theme_constant_override("separation", 8)
@@ -473,7 +1071,7 @@ func _build_ui() -> void:
 	_shop_title = Label.new()
 	_shop_title.add_theme_font_size_override("font_size", 18)
 	_shop_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_shop_title.text = "招兵店"
+	_shop_title.text = "招兵/遗物"
 	shop_v.add_child(_shop_title)
 	_shop_status = Label.new()
 	_shop_status.add_theme_font_size_override("font_size", 13)
@@ -481,7 +1079,7 @@ func _build_ui() -> void:
 	_shop_status.text = "种类 0/6"
 	shop_v.add_child(_shop_status)
 	var shelf_header := Label.new()
-	shelf_header.text = "货架"
+	shelf_header.text = "招兵货架（达克特）"
 	shop_v.add_child(shelf_header)
 	_shop_list = VBoxContainer.new()
 	_shop_list.add_theme_constant_override("separation", 6)
@@ -502,11 +1100,56 @@ func _build_ui() -> void:
 	_shop_army_list = VBoxContainer.new()
 	_shop_army_list.add_theme_constant_override("separation", 4)
 	shop_v.add_child(_shop_army_list)
+	var relic_header := Label.new()
+	relic_header.text = "遗物货架（尸骸）"
+	relic_header.add_theme_color_override("font_color", Color(0.88, 0.82, 0.95, 1.0))
+	shop_v.add_child(relic_header)
+	_relic_shop_status = Label.new()
+	_relic_shop_status.add_theme_font_size_override("font_size", 13)
+	_relic_shop_status.text = "遗物槽 0/3"
+	shop_v.add_child(_relic_shop_status)
+	_relic_shop_list = VBoxContainer.new()
+	_relic_shop_list.add_theme_constant_override("separation", 6)
+	shop_v.add_child(_relic_shop_list)
+	_relic_refresh_btn = Button.new()
+	_relic_refresh_btn.text = "刷新遗物"
+	_relic_refresh_btn.custom_minimum_size = Vector2(200, 40)
+	_relic_refresh_btn.pressed.connect(func() -> void: relic_refresh_pressed.emit())
+	shop_v.add_child(_relic_refresh_btn)
+	_owned_relic_list = VBoxContainer.new()
+	_owned_relic_list.add_theme_constant_override("separation", 2)
+	shop_v.add_child(_owned_relic_list)
 	_shop_next_btn = Button.new()
 	_shop_next_btn.text = "下一层"
 	_shop_next_btn.custom_minimum_size = Vector2(0, 48)
 	_shop_next_btn.pressed.connect(func() -> void: next_floor_pressed.emit())
 	shop_v.add_child(_shop_next_btn)
+
+	_shrine_panel = _make_centered_panel(Vector2(360, 220))
+	_shrine_panel.visible = false
+	_root.add_child(_shrine_panel)
+	var shrine_v := VBoxContainer.new()
+	shrine_v.add_theme_constant_override("separation", 10)
+	_shrine_panel.add_child(shrine_v)
+	_shrine_title = Label.new()
+	_shrine_title.text = "神龛"
+	_shrine_title.add_theme_font_size_override("font_size", 18)
+	_shrine_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	shrine_v.add_child(_shrine_title)
+	var shrine_hint := Label.new()
+	shrine_hint.text = "选择一项恩惠"
+	shrine_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	shrine_v.add_child(shrine_hint)
+	var buff_btn := Button.new()
+	buff_btn.text = "短时攻击强化"
+	buff_btn.custom_minimum_size = Vector2(0, 44)
+	buff_btn.pressed.connect(func() -> void: shrine_choice_pressed.emit(0))
+	shrine_v.add_child(buff_btn)
+	var corpus_btn := Button.new()
+	corpus_btn.text = "获得尸骸"
+	corpus_btn.custom_minimum_size = Vector2(0, 44)
+	corpus_btn.pressed.connect(func() -> void: shrine_choice_pressed.emit(1))
+	shrine_v.add_child(corpus_btn)
 
 	_chest_panel = _make_centered_panel(Vector2(360, 220))
 	_chest_panel.visible = false
@@ -538,21 +1181,81 @@ func _build_ui() -> void:
 	next_btn.pressed.connect(func() -> void: next_floor_pressed.emit())
 	inter_v.add_child(next_btn)
 
-	_end_panel = _make_centered_panel(Vector2(300, 180))
+	_end_panel = _make_centered_panel(Vector2(360, 340))
 	_end_panel.visible = false
 	_root.add_child(_end_panel)
 	var end_v := VBoxContainer.new()
+	end_v.add_theme_constant_override("separation", 10)
 	_end_panel.add_child(end_v)
 	_end_label = Label.new()
 	_end_label.add_theme_font_size_override("font_size", 24)
 	_end_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_end_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	end_v.add_child(_end_label)
+	_end_stats_label = Label.new()
+	_end_stats_label.add_theme_font_size_override("font_size", 15)
+	_end_stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_end_stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_end_stats_label.add_theme_color_override("font_color", Color(0.82, 0.86, 0.92, 1.0))
+	end_v.add_child(_end_stats_label)
 	var restart := Button.new()
-	restart.text = "重新开始"
+	restart.text = "再开一局"
 	restart.custom_minimum_size = Vector2(0, 48)
 	restart.pressed.connect(func() -> void: restart_pressed.emit())
 	end_v.add_child(restart)
+	var menu_btn := Button.new()
+	menu_btn.text = "回主菜单"
+	menu_btn.custom_minimum_size = Vector2(0, 44)
+	menu_btn.pressed.connect(func() -> void: main_menu_pressed.emit())
+	end_v.add_child(menu_btn)
+
+	# Phase G: character select + skill tree panel.
+	_character_panel = _make_centered_panel(Vector2(420, 460))
+	_character_panel.visible = false
+	_root.add_child(_character_panel)
+	var char_v := VBoxContainer.new()
+	char_v.add_theme_constant_override("separation", 8)
+	_character_panel.add_child(char_v)
+	_character_title = Label.new()
+	_character_title.text = "开局选角"
+	_character_title.add_theme_font_size_override("font_size", 22)
+	_character_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	char_v.add_child(_character_title)
+	_character_status = Label.new()
+	_character_status.text = "技能点余额：0"
+	_character_status.add_theme_font_size_override("font_size", 14)
+	_character_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_character_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	char_v.add_child(_character_status)
+	var char_scroll := ScrollContainer.new()
+	char_scroll.custom_minimum_size = Vector2(0, 120)
+	char_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	char_v.add_child(char_scroll)
+	_character_list = VBoxContainer.new()
+	_character_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_character_list.add_theme_constant_override("separation", 6)
+	char_scroll.add_child(_character_list)
+	var skill_scroll := ScrollContainer.new()
+	skill_scroll.custom_minimum_size = Vector2(0, 140)
+	skill_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	char_v.add_child(skill_scroll)
+	_skill_list = VBoxContainer.new()
+	_skill_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_skill_list.add_theme_constant_override("separation", 4)
+	skill_scroll.add_child(_skill_list)
+	_character_confirm_btn = Button.new()
+	_character_confirm_btn.text = "出征"
+	_character_confirm_btn.custom_minimum_size = Vector2(0, 44)
+	_character_confirm_btn.pressed.connect(
+		func() -> void: character_confirm_pressed.emit(_pending_character_id)
+	)
+	char_v.add_child(_character_confirm_btn)
+	_character_close_btn = Button.new()
+	_character_close_btn.text = "关闭"
+	_character_close_btn.custom_minimum_size = Vector2(0, 40)
+	_character_close_btn.visible = false
+	_character_close_btn.pressed.connect(func() -> void: hide_character_select())
+	char_v.add_child(_character_close_btn)
 
 
 func _make_centered_panel(min_size: Vector2) -> PanelContainer:

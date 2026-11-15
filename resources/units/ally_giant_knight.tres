@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="UnitDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/unit_definition.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/sprites/paper_cutout/units/unit_giant_knight_blue.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"giant_knight"
+display_name = "巨甲骑士"
+max_hp = 160
+attack_damage = 10
+attack_interval = 1.05
+attack_range = 70.0
+move_speed = 125.0
+sprite = ExtResource("2_tex")
+sprite_scale = 0.24
+gold_drop_min = 0
+gold_drop_max = 0
+shop_price = 8
+rarity_tier = 3
+rank = 0
+keyword = &"先锋"

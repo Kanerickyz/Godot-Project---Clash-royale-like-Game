@@ -6,7 +6,7 @@
 [resource]
 script = ExtResource("1_script")
 id = &"ally_spear"
-display_name = "枪兵"
+display_name = "长矛兵"
 max_hp = 70
 attack_damage = 8
 attack_interval = 0.75
@@ -18,3 +18,5 @@ gold_drop_min = 0
 gold_drop_max = 0
 shop_price = 3
 rarity_tier = 1
+rank = 0
+keyword = &"近战"

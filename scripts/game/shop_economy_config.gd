@@ -40,14 +40,20 @@ extends Resource
 ])
 
 @export_group("Pool")
+## Phase D first-batch 12 (unit_roster.md).
 @export var pool_unit_paths: PackedStringArray = PackedStringArray([
 	"res://resources/units/ally_skeleton.tres",
-	"res://resources/units/ally_spear.tres",
 	"res://resources/units/ally_shield.tres",
+	"res://resources/units/ally_spear.tres",
 	"res://resources/units/ally_axe.tres",
 	"res://resources/units/ally_archer.tres",
-	"res://resources/units/ally_hunter.tres",
-	"res://resources/units/ally_musket.tres",
+	"res://resources/units/ally_crossbow.tres",
+	"res://resources/units/ally_banner.tres",
+	"res://resources/units/ally_wardrum.tres",
+	"res://resources/units/ally_horsebow.tres",
+	"res://resources/units/ally_ram.tres",
+	"res://resources/units/ally_giant_knight.tres",
+	"res://resources/units/ally_soulcaller.tres",
 ])
 
 

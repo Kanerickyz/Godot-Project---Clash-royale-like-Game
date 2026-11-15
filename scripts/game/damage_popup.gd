@@ -31,3 +31,36 @@ static func spawn(parent: Node, at: Vector2, amount: int, color: Color = Color(1
 	parent.add_child(popup)
 	popup.global_position = at + Vector2(0, -28)
 	popup.setup(amount, color)
+
+
+static func spawn_text(
+	parent: Node,
+	at: Vector2,
+	text: String,
+	color: Color = Color(0.95, 0.85, 0.35, 1.0)
+) -> void:
+	if parent == null or text == "":
+		return
+	var popup := DamagePopup.new()
+	parent.add_child(popup)
+	popup.global_position = at + Vector2(0, -28)
+	popup.z_index = 40
+	var label := Label.new()
+	label.text = text
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 16)
+	label.add_theme_color_override("font_color", color)
+	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	label.add_theme_constant_override("outline_size", 3)
+	var font: Font = UiFonts.get_font()
+	if font != null:
+		label.add_theme_font_override("font", font)
+	label.position = Vector2(-48, -10)
+	popup.add_child(label)
+	var tw := popup.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(popup, "global_position", popup.global_position + Vector2(0, -48), 0.7).set_ease(
+		Tween.EASE_OUT
+	)
+	tw.tween_property(label, "modulate:a", 0.0, 0.7).set_delay(0.2)
+	tw.chain().tween_callback(popup.queue_free)

@@ -3,6 +3,8 @@ extends Resource
 ## Numeric + presentation definition for a combat unit. Runtime code must duplicate().
 
 
+enum Rank { RECRUIT = 0, VETERAN = 1, CHAMPION = 2 }
+
 @export var id: StringName = &""
 @export var display_name: String = "Unit"
 @export var max_hp: int = 100
@@ -19,3 +21,12 @@ extends Resource
 @export var shop_price: int = 0
 ## 1=common, 2=uncommon, 3=rare. Old resources default to 1.
 @export var rarity_tier: int = 1
+@export_group("Rank / Oath data")
+## 0=新兵 1=老兵 2=冠军. Old resources default to 新兵.
+@export var rank: int = Rank.RECRUIT
+## Champion keyword for oaths (Phase D). Stored + HUD-visible in Phase C; effects later.
+@export var keyword: StringName = &""
+
+
+func rank_label() -> String:
+	return UnitMergeService.rank_label(rank)

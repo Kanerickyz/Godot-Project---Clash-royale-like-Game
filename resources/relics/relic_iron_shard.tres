@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="RelicDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/relic_definition.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"iron_shard"
+display_name = "铁骸碎片"
+description = "全军承伤降低 10%"
+price = 6
+effect_kind = 1
+effect_value = 0.1

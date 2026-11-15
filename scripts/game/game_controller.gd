@@ -1,31 +1,53 @@
 class_name GameController
 extends Node2D
-## Phase B: floor loop + ducat wallet + interstitial shop (buy/refresh/level/sell).
+## Phase G: meta progress (skill points / unlocks / character pick) on F run loop.
 
 
 enum RunPhase { FLOOR, INTERSTITIAL, GAME_OVER }
+enum RunOutcome { NONE, VICTORY, DEFEAT }
 
 const CHEST_ENGAGE_RADIUS := 110.0
 const PATH_SPAWN_CFG := "res://resources/world/world_spawn.tres"
 const PATH_FLOOR_RUN := "res://resources/world/floor_run.tres"
 const PATH_THREAT := "res://resources/combat/threat_config.tres"
 const PATH_SHOP_ECONOMY := "res://resources/world/shop_economy.tres"
+const PATH_MERGE_RANK := "res://resources/combat/merge_rank.tres"
+const PATH_CORPUS_RELICS := "res://resources/world/corpus_relics.tres"
+const PATH_META_PROGRESS := "res://resources/meta/meta_progress.tres"
+const PATH_OATH_IRON_WALL := "res://resources/oaths/oath_iron_wall.tres"
+const PATH_OATH_MYRIAD_BONES := "res://resources/oaths/oath_myriad_bones.tres"
+const PATH_OATH_TAUT_BOW := "res://resources/oaths/oath_taut_bow.tres"
 
 var gold: int = 0
+var corpus: int = 0
 var game_over: bool = false
 var ui_blocking: bool = false
 var run_phase: RunPhase = RunPhase.FLOOR
+var run_outcome: RunOutcome = RunOutcome.NONE
 var floor_index: int = 1
+var dungeon_type_id: String = "crypt"
+var dungeon_type_label: String = "地下墓穴"
 
 ## Test/harness: when non-zero, overrides keyboard/joystick move input.
 var forced_move_vector: Vector2 = Vector2.ZERO
+## When true, skip opening character-select gate (runners set this implicitly via node name != Main).
+var meta_auto_start: bool = true
+## Optional override save path for tests (empty → config default under user://).
+var meta_save_path_override: String = ""
 
 var _rng := RandomNumberGenerator.new()
 var _spawn_cfg: WorldSpawnConfig
 var _floor_cfg: FloorRunConfig
 var _shop_cfg: ShopEconomyConfig
+var _merge_cfg: MergeRankConfig
+var _corpus_cfg: CorpusRelicsConfig
+var _meta_cfg: MetaProgressConfig
+var _meta: MetaProgressService = MetaProgressService.new()
 var _shop: ShopService = ShopService.new()
+var _relics: RelicService = RelicService.new()
 var _threat: ThreatClock = ThreatClock.new()
+var _revive_queue: ReviveQueue = ReviveQueue.new()
+var _oath_service: OathService = OathService.new()
 var _map: RoguelikeMapGenerator
 var _ground_host: Node2D
 var _entities: Node2D
@@ -36,14 +58,23 @@ var _portal: FloorPortal
 var _hud: GameHud
 var _followers: Array[SquadMember] = []
 var _focused_chest: RoamChest
+var _focused_shrine: FloorShrine
+var _final_boss: Boss
 var _respawn_timer: float = 0.0
 var _next_respawn_interval: float = 30.0
 var _enemy_serial: int = 0
 var _chest_serial: int = 0
+var _shrine_serial: int = 0
 var _occupied_spots: Array[Vector2] = []
 var _hitstop_active: bool = false
 var _hitstop_restore_scale: float = 1.0
 var _shop_status: String = ""
+var _relic_status: String = ""
+var _last_merge_log: String = ""
+var _merge_rebuild_guard: bool = false
+var _base_threat_ramp: float = 120.0
+var _run_started: bool = false
+var _awaiting_character_select: bool = false
 
 var _assemble_cd: float = 0.0
 var _assemble_active_left: float = 0.0
@@ -51,23 +82,35 @@ var _rage_cd: float = 0.0
 var _rage_active_left: float = 0.0
 var _portal_confirm_left: float = 0.0
 var _portal_holding: bool = false
+var _shrine_buff_left: float = 0.0
+var _shrine_choice_open: bool = false
 
 
 func _ready() -> void:
 	add_to_group(&"game_controller")
 	_rng.randomize()
+	# Main scene node is named "Main" → require character select for L4 presentable flow.
+	if name == "Main":
+		meta_auto_start = false
 	_spawn_cfg = _load_spawn_config()
 	_floor_cfg = _load_floor_run_config()
 	_shop_cfg = _load_shop_economy()
+	_merge_cfg = _load_merge_rank_config()
 	_threat.configure(_load_threat_config())
+	_init_oath_service()
 	_init_shop_service()
+	_init_relic_service()
+	_init_meta_service()
 	gold = _shop_cfg.starting_ducats if _shop_cfg != null else 20
+	corpus = _corpus_cfg.starting_corpus if _corpus_cfg != null else 0
 	_build_world_shell()
 	_hud = GameHud.new()
 	_hud.name = "HUD"
 	add_child(_hud)
 	_hud.refresh_gold(gold)
+	_hud.refresh_corpus(corpus)
 	_hud.restart_pressed.connect(_on_restart)
+	_hud.main_menu_pressed.connect(_on_main_menu)
 	_hud.assemble_pressed.connect(_on_assemble_pressed)
 	_hud.rage_pressed.connect(_on_rage_pressed)
 	_hud.portal_confirm_pressed.connect(_on_portal_confirm_pressed)
@@ -76,12 +119,26 @@ func _ready() -> void:
 	_hud.shop_refresh_pressed.connect(_on_shop_refresh)
 	_hud.shop_upgrade_pressed.connect(_on_shop_upgrade)
 	_hud.shop_sell_pressed.connect(_on_shop_sell)
-	_start_floor(true)
-	_hud.set_world_hint("WASD/摇杆移动 · Q集合 · R怒意 · 靠近传送门进层间商店")
+	_hud.relic_buy_pressed.connect(_on_relic_buy)
+	_hud.relic_refresh_pressed.connect(_on_relic_refresh)
+	_hud.shrine_choice_pressed.connect(_on_shrine_choice)
+	_hud.shrine_interact_pressed.connect(_on_shrine_interact_pressed)
+	_hud.character_confirm_pressed.connect(_on_character_confirm)
+	_hud.character_row_pressed.connect(_on_character_row)
+	_hud.skill_buy_pressed.connect(_on_skill_buy)
+	_hud.meta_panel_open_pressed.connect(_on_meta_panel_open)
+	if meta_auto_start:
+		_begin_run_with_character(_meta.preferred_character_id())
+	else:
+		_open_character_select(true)
+	_hud.set_world_hint("WASD/摇杆移动 · Q集合 · R怒意 · 靠近传送门/神龛")
+	_refresh_revive_hud()
+	_refresh_oaths()
+	_refresh_relic_hud()
 
 
 func get_move_vector() -> Vector2:
-	if ui_blocking or game_over or run_phase != RunPhase.FLOOR:
+	if ui_blocking or game_over or _awaiting_character_select or run_phase != RunPhase.FLOOR:
 		return Vector2.ZERO
 	if forced_move_vector != Vector2.ZERO:
 		var forced := forced_move_vector
@@ -116,6 +173,61 @@ func get_floor_index() -> int:
 	return floor_index
 
 
+func get_total_floors() -> int:
+	return _floor_cfg.resolved_total_floors() if _floor_cfg != null else 3
+
+
+func is_final_floor() -> bool:
+	return _floor_cfg != null and _floor_cfg.is_final_floor_index(floor_index)
+
+
+func get_run_outcome() -> RunOutcome:
+	return run_outcome
+
+
+func get_dungeon_type_id() -> String:
+	return dungeon_type_id
+
+
+func get_dungeon_type_label() -> String:
+	return dungeon_type_label
+
+
+func get_final_boss() -> Boss:
+	return _final_boss
+
+
+func get_run_stats() -> Dictionary:
+	var stats := {
+		"floors_reached": floor_index,
+		"floor_index": floor_index,
+		"total_floors": get_total_floors(),
+		"ducats": gold,
+		"corpus": corpus,
+		"dungeon_id": dungeon_type_id,
+		"dungeon_label": dungeon_type_label,
+		"outcome": run_outcome,
+		"won": run_outcome == RunOutcome.VICTORY,
+		"skill_points": _meta.skill_points if _meta != null else 0,
+		"awarded_skill_points": _meta.last_awarded_skill_points if _meta != null else 0,
+		"selected_character_id": String(_meta.selected_character_id) if _meta != null else "",
+		"new_unlocks": Array(_meta.last_new_unlocks) if _meta != null else [],
+	}
+	return stats
+
+
+func get_meta_service() -> MetaProgressService:
+	return _meta
+
+
+func get_selected_character_id() -> StringName:
+	return _meta.selected_character_id if _meta != null else &""
+
+
+func is_awaiting_character_select() -> bool:
+	return _awaiting_character_select
+
+
 func get_threat_multiplier() -> float:
 	return _threat.get_multiplier()
 
@@ -136,7 +248,7 @@ func debug_advance_threat(seconds: float) -> void:
 
 ## Test helper: enter portal as if confirmed near it.
 func debug_enter_portal() -> void:
-	if run_phase != RunPhase.FLOOR or game_over:
+	if run_phase != RunPhase.FLOOR or game_over or is_final_floor():
 		return
 	_enter_interstitial()
 
@@ -148,16 +260,85 @@ func debug_advance_floor() -> void:
 	_begin_next_floor()
 
 
+## Test helper: walk portal → next until final floor (or stop early).
+func debug_goto_final_floor() -> void:
+	var guard := 16
+	while not is_final_floor() and guard > 0 and not game_over:
+		guard -= 1
+		if run_phase == RunPhase.FLOOR:
+			debug_enter_portal()
+		if run_phase == RunPhase.INTERSTITIAL:
+			debug_advance_floor()
+
+
+## Test helper: deal lethal damage to the final boss if present.
+func debug_kill_final_boss() -> bool:
+	if _final_boss == null or not is_instance_valid(_final_boss) or _final_boss.is_dead:
+		return false
+	_final_boss.take_damage(_final_boss.current_hp + 9999)
+	return true
+
+
+## Test helper: force character select + start (also closes select gate).
+func debug_confirm_character(character_id: StringName) -> Dictionary:
+	return _begin_run_with_character(character_id)
+
+
+## Test helper: purchase a meta skill node and persist.
+func debug_purchase_skill(node_id: StringName) -> Dictionary:
+	if _meta == null:
+		return {"ok": false, "code": MetaProgressService.RESULT_UNKNOWN}
+	var result := _meta.try_purchase_node(node_id)
+	if bool(result.get("ok", false)):
+		_meta.save_to_disk()
+		_refresh_meta_hud()
+	return result
+
+
+## Test helper: wipe living followers then lethal damage on captain → defeat.
+func debug_force_defeat() -> void:
+	if game_over:
+		return
+	while get_follower_count() > 0:
+		debug_kill_follower(0)
+	if _captain != null and is_instance_valid(_captain) and not _captain.is_dead:
+		_captain.take_damage(_captain.current_hp + 9999)
+
+
 func get_ducats() -> int:
 	return gold
+
+
+func get_corpus() -> int:
+	return corpus
 
 
 func get_shop_service() -> ShopService:
 	return _shop
 
 
+func get_relic_service() -> RelicService:
+	return _relics
+
+
 func get_shop_economy() -> ShopEconomyConfig:
 	return _shop_cfg
+
+
+func get_corpus_relics_config() -> CorpusRelicsConfig:
+	return _corpus_cfg
+
+
+func get_relic_rows() -> Array:
+	return _relics.get_hud_rows() if _relics != null else []
+
+
+func get_relic_revive_time_multiplier() -> float:
+	return _relics.revive_time_multiplier() if _relics != null else 1.0
+
+
+func get_focused_shrine() -> FloorShrine:
+	return _focused_shrine
 
 
 func get_follower_count() -> int:
@@ -172,6 +353,100 @@ func get_last_interest() -> int:
 	return _shop.last_interest if _shop != null else 0
 
 
+func get_revive_queue_size() -> int:
+	return _revive_queue.size() if _revive_queue != null else 0
+
+
+func get_revive_queue_rows() -> Array:
+	return _revive_queue.get_hud_rows() if _revive_queue != null else []
+
+
+func get_last_merge_log() -> String:
+	return _last_merge_log
+
+
+func get_captain_hp() -> int:
+	if _captain == null or not is_instance_valid(_captain):
+		return 0
+	return _captain.current_hp
+
+
+func get_captain() -> SquadMember:
+	return _captain
+
+
+func get_merge_rank_config() -> MergeRankConfig:
+	return _merge_cfg
+
+
+func get_living_follower_hps() -> Array:
+	var out: Array = []
+	for m in _followers:
+		if m == null or not is_instance_valid(m) or m.is_dead:
+			continue
+		out.append(m.current_hp)
+	return out
+
+
+func get_army_roster_defs() -> Array:
+	## Living roster defs + queued (unscaled). Army domain for type cap / oaths.
+	var out: Array = []
+	for m in _followers:
+		if m == null or not is_instance_valid(m):
+			continue
+		var d := m.roster_definition if m.roster_definition != null else m.definition
+		if d != null:
+			out.append(d)
+	if _revive_queue != null:
+		for d2 in _revive_queue.get_defs():
+			out.append(d2)
+	return out
+
+
+func get_oath_service() -> OathService:
+	return _oath_service
+
+
+func get_oath_rows() -> Array:
+	return _oath_service.build_hud_rows(get_army_roster_defs()) if _oath_service != null else []
+
+
+func get_champion_keyword_count(keyword: StringName) -> int:
+	if _oath_service == null:
+		return 0
+	return _oath_service.count_for_keyword(get_army_roster_defs(), keyword)
+
+
+func get_oath_tier(oath_id: StringName) -> int:
+	if _oath_service == null:
+		return 0
+	return _oath_service.tier_for_id(oath_id, get_army_roster_defs())
+
+
+func get_oath_damage_taken_multiplier() -> float:
+	if _oath_service == null:
+		return 1.0
+	return _oath_service.damage_taken_multiplier(get_army_roster_defs())
+
+
+func get_oath_revive_time_multiplier() -> float:
+	if _oath_service == null:
+		return 1.0
+	return _oath_service.revive_time_multiplier(get_army_roster_defs())
+
+
+func get_oath_ranged_damage_multiplier() -> float:
+	if _oath_service == null:
+		return 1.0
+	return _oath_service.ranged_damage_multiplier(get_army_roster_defs())
+
+
+func get_oath_ranged_interval_multiplier() -> float:
+	if _oath_service == null:
+		return 1.0
+	return _oath_service.ranged_interval_multiplier(get_army_roster_defs())
+
+
 ## Test helper: grant ducats without pickup.
 func debug_add_ducats(amount: int) -> void:
 	if amount == 0:
@@ -179,6 +454,17 @@ func debug_add_ducats(amount: int) -> void:
 	gold = maxi(0, gold + amount)
 	if _hud != null:
 		_hud.refresh_gold(gold)
+	if run_phase == RunPhase.INTERSTITIAL:
+		_refresh_shop_hud()
+
+
+## Test helper: grant corpus without pickup.
+func debug_add_corpus(amount: int) -> void:
+	if amount == 0:
+		return
+	corpus = maxi(0, corpus + amount)
+	if _hud != null:
+		_hud.refresh_corpus(corpus)
 	if run_phase == RunPhase.INTERSTITIAL:
 		_refresh_shop_hud()
 
@@ -198,6 +484,89 @@ func debug_shop_upgrade() -> Dictionary:
 
 func debug_shop_sell(follower_index: int) -> Dictionary:
 	return _try_shop_sell(follower_index)
+
+
+func debug_relic_buy(slot_index: int) -> Dictionary:
+	return _try_relic_buy(slot_index)
+
+
+func debug_relic_refresh() -> Dictionary:
+	return _try_relic_refresh()
+
+
+## Test helper: credit corpus as if a kill drop was collected (applies find bonus).
+func debug_grant_kill_corpus(is_elite: bool = false) -> int:
+	var base := 0
+	if _corpus_cfg != null:
+		base = _corpus_cfg.roll_kill_corpus(_rng, is_elite)
+	var bonus := _relics.corpus_find_bonus() if _relics != null else 0
+	var total := maxi(0, base + bonus)
+	if total > 0:
+		_on_corpus_collected(total)
+	return total
+
+
+## Test helper: recruit a unit definition (triggers auto-merge).
+func debug_recruit(def: UnitDefinition) -> void:
+	recruit_unit(def)
+
+
+## Test helper: kill living follower by index (enters revive queue).
+func debug_kill_follower(follower_index: int) -> bool:
+	if follower_index < 0 or follower_index >= _followers.size():
+		return false
+	var m := _followers[follower_index]
+	if m == null or not is_instance_valid(m) or m.is_dead:
+		return false
+	# Overcome incoming DR (oaths) so one call always kills.
+	var dr := maxf(0.05, m.incoming_damage_multiplier)
+	var need := int(ceil(float(m.current_hp) / dr)) + 1
+	m.take_damage(maxi(1, need))
+	return m.is_dead or not is_instance_valid(m) or _followers.find(m) < 0
+
+
+## Test helper: advance revive timers without waiting real time.
+func debug_advance_revive(seconds: float) -> void:
+	_tick_revive_queue(maxf(0.0, seconds))
+
+
+## Test helper: apply damage through captain share hook.
+func debug_damage_captain(amount: int) -> void:
+	if _captain == null or not is_instance_valid(_captain):
+		return
+	_captain.take_damage(maxi(0, amount))
+
+
+## Captain damage share hook (called from SquadMember.take_damage).
+## Returns true if damage was fully redirected to living followers.
+func try_share_captain_damage(amount: int) -> bool:
+	if amount <= 0 or game_over:
+		return false
+	var living: Array[SquadMember] = []
+	for m in _followers:
+		if m == null or not is_instance_valid(m) or m.is_dead:
+			continue
+		living.append(m)
+	if living.is_empty():
+		return false
+	var n := living.size()
+	var each := int(amount / n)
+	var rem := int(amount % n)
+	for i in n:
+		var share := each + (1 if i < rem else 0)
+		if share > 0:
+			living[i].take_damage(share)
+	if _revive_queue != null and _merge_cfg != null:
+		_revive_queue.extend_all(_merge_cfg.share_extend())
+	_refresh_revive_hud()
+	if _captain != null and is_instance_valid(_captain) and _entities != null:
+		DamagePopup.spawn_text(
+			_entities,
+			_captain.global_position,
+			"分摊",
+			Color(0.85, 0.7, 0.95, 1.0)
+		)
+	return true
 
 
 ## Brief global hitstop (real-time). Re-entrant calls while active are ignored.
@@ -224,10 +593,12 @@ func _process(delta: float) -> void:
 		_update_command_input()
 		_update_portal(delta)
 		_update_respawn(delta)
+		_tick_revive_queue(delta)
 	if _captain == null or not is_instance_valid(_captain):
 		return
 	if run_phase == RunPhase.FLOOR and not game_over:
 		_update_chest_focus()
+		_update_shrine_focus()
 
 
 func _update_command_input() -> void:
@@ -238,7 +609,10 @@ func _update_command_input() -> void:
 	if Input.is_physical_key_pressed(KEY_R):
 		_try_rage()
 	if Input.is_physical_key_pressed(KEY_E):
-		_try_portal_confirm(true)
+		if _focused_shrine != null and not _focused_shrine.is_used():
+			_open_shrine_choice(_focused_shrine)
+		else:
+			_try_portal_confirm(true)
 	else:
 		_portal_holding = false
 		_portal_confirm_left = 0.0
@@ -255,6 +629,12 @@ func _update_commands(delta: float) -> void:
 		_rage_active_left = maxf(0.0, _rage_active_left - delta)
 		if _rage_active_left <= 0.0:
 			_clear_rage()
+	if _shrine_buff_left > 0.0:
+		_shrine_buff_left = maxf(0.0, _shrine_buff_left - delta)
+		if _shrine_buff_left <= 0.0:
+			_refresh_temp_damage_mults()
+			if _hud != null:
+				_hud.set_world_hint("神龛增益结束")
 	if _hud != null and _floor_cfg != null:
 		_hud.set_command_cooldowns(
 			_assemble_cd,
@@ -309,8 +689,10 @@ func _try_rage() -> void:
 func _apply_rage(active: bool) -> void:
 	if _floor_cfg == null:
 		return
-	var dmg := _floor_cfg.rage_damage_mult if active else 1.0
+	var rage_dmg := _floor_cfg.rage_damage_mult if active else 1.0
 	var spd := _floor_cfg.rage_speed_mult if active else 1.0
+	var shrine_dmg := _shrine_attack_mult()
+	var dmg := rage_dmg * shrine_dmg
 	for member in _followers:
 		if member == null or not is_instance_valid(member) or member.is_dead:
 			continue
@@ -324,6 +706,16 @@ func _apply_rage(active: bool) -> void:
 
 func _clear_rage() -> void:
 	_apply_rage(false)
+
+
+func _shrine_attack_mult() -> float:
+	if _shrine_buff_left <= 0.0 or _corpus_cfg == null:
+		return 1.0
+	return 1.0 + maxf(0.0, _corpus_cfg.shrine_attack_bonus)
+
+
+func _refresh_temp_damage_mults() -> void:
+	_apply_rage(_rage_active_left > 0.0)
 
 
 func _update_portal(delta: float) -> void:
@@ -362,6 +754,9 @@ func _try_portal_confirm(from_input: bool) -> void:
 func _enter_interstitial() -> void:
 	if run_phase != RunPhase.FLOOR or game_over:
 		return
+	# Final floor has no layer-exit portal; win only by defeating the boss.
+	if is_final_floor():
+		return
 	run_phase = RunPhase.INTERSTITIAL
 	ui_blocking = true
 	_set_combat_enabled(false)
@@ -376,9 +771,15 @@ func _enter_interstitial() -> void:
 		interest = _shop.settle_interest(gold)
 		gold += interest
 		_shop.roll_shelf(_rng)
+	if _relics != null:
+		_relics.roll_shelf(_rng)
 	_shop_status = "利息 +%d" % interest if interest >= 0 else ""
+	_relic_status = ""
+	_shrine_choice_open = false
 	if _hud != null:
+		_hud.hide_shrine_choice()
 		_hud.refresh_gold(gold)
+		_hud.refresh_corpus(corpus)
 		_refresh_shop_hud()
 
 
@@ -389,7 +790,10 @@ func _on_next_floor_pressed() -> void:
 func _begin_next_floor() -> void:
 	if run_phase != RunPhase.INTERSTITIAL or game_over:
 		return
-	floor_index += 1
+	var next_index := floor_index + 1
+	if next_index > get_total_floors():
+		return
+	floor_index = next_index
 	if _hud != null:
 		_hud.hide_interstitial()
 	_start_floor(false)
@@ -397,8 +801,12 @@ func _begin_next_floor() -> void:
 
 func _start_floor(is_run_start: bool) -> void:
 	run_phase = RunPhase.FLOOR
-	game_over = false
+	if is_run_start:
+		run_outcome = RunOutcome.NONE
+		game_over = false
 	ui_blocking = false
+	_resolve_dungeon_type()
+	_apply_floor_threat_pressure()
 	_threat.reset()
 	_respawn_timer = 0.0
 	_assemble_cd = 0.0
@@ -408,23 +816,40 @@ func _start_floor(is_run_start: bool) -> void:
 	_portal_confirm_left = 0.0
 	_portal_holding = false
 	_occupied_spots.clear()
+	_shrine_buff_left = 0.0
+	_shrine_choice_open = false
+	_focused_shrine = null
+	_final_boss = null
 	_clear_floor_entities(is_run_start)
 	_generate_map()
 	if is_run_start:
 		_spawn_captain()
 		_spawn_starting_followers()
+		if _relics != null:
+			_relics.clear_run()
+			corpus = _corpus_cfg.starting_corpus if _corpus_cfg != null else 0
 	else:
 		_reposition_army_to_safe()
 	_spawn_enemies_initial()
 	_spawn_chests_initial()
-	_spawn_portal()
+	_spawn_shrines_initial()
+	if is_final_floor():
+		_spawn_final_boss()
+	else:
+		_spawn_portal()
 	_roll_next_respawn_interval()
 	_set_combat_enabled(true)
 	_refresh_threat_hud()
+	_refresh_temp_damage_mults()
+	_refresh_oaths()
+	_refresh_relic_hud()
+	_refresh_floor_hud()
 	if _hud != null:
-		_hud.refresh_floor(floor_index)
+		_hud.refresh_corpus(corpus)
 		_hud.hide_interstitial()
+		_hud.hide_shrine_choice()
 		_hud.set_portal_prompt_visible(false)
+		_hud.set_shrine_prompt_visible(false)
 
 
 func _clear_floor_entities(clear_army: bool) -> void:
@@ -437,11 +862,15 @@ func _clear_floor_entities(clear_army: bool) -> void:
 		for f in _followers:
 			if f != null and is_instance_valid(f) and not f.is_dead:
 				keep.append(f)
-	# Prune dead followers from roster.
+	# Phase C: dead followers enter revive queue (not permanent prune, except sell / run reset).
 	var alive_followers: Array[SquadMember] = []
 	for f in _followers:
-		if f != null and is_instance_valid(f) and not f.is_dead:
-			alive_followers.append(f)
+		if f == null or not is_instance_valid(f):
+			continue
+		if f.is_dead:
+			_enqueue_follower_def(_roster_def_of(f))
+			continue
+		alive_followers.append(f)
 	_followers = alive_followers
 	var children := _entities.get_children()
 	for child in children:
@@ -450,10 +879,15 @@ func _clear_floor_entities(clear_army: bool) -> void:
 		_entities.remove_child(child)
 		child.free()
 	_portal = null
+	_final_boss = null
 	_focused_chest = null
+	_focused_shrine = null
 	if clear_army:
 		_captain = null
 		_followers.clear()
+		if _revive_queue != null:
+			_revive_queue.clear()
+	_refresh_revive_hud()
 
 
 func _build_world_shell() -> void:
@@ -487,12 +921,39 @@ func _generate_map() -> void:
 			child.free()
 	_map = RoguelikeMapGenerator.new()
 	_map.generate(_spawn_cfg, _rng)
-	_map.build_visuals(_ground_host, _rng)
+	_map.build_visuals(_ground_host, _rng, dungeon_type_id, is_final_floor())
 	if _camera != null:
 		_camera.limit_left = 0
 		_camera.limit_top = 0
 		_camera.limit_right = int(_map.map_size.x)
 		_camera.limit_bottom = int(_map.map_size.y)
+
+
+func _resolve_dungeon_type() -> void:
+	if _floor_cfg == null:
+		dungeon_type_id = "crypt"
+		dungeon_type_label = "地下墓穴"
+		return
+	dungeon_type_id = _floor_cfg.dungeon_type_id_for_floor(floor_index)
+	dungeon_type_label = _floor_cfg.dungeon_type_label_for_floor(floor_index)
+
+
+func _apply_floor_threat_pressure() -> void:
+	# Restore base ramp, then scale on final floor for "能通可败" pressure.
+	var cfg := _threat.config if _threat != null else null
+	if cfg == null:
+		return
+	if _base_threat_ramp <= 0.0:
+		_base_threat_ramp = cfg.ramp_duration
+	cfg.ramp_duration = _base_threat_ramp
+	if is_final_floor() and _floor_cfg != null:
+		cfg.ramp_duration = maxf(20.0, _base_threat_ramp * _floor_cfg.final_floor_threat_ramp_scale)
+
+
+func _refresh_floor_hud() -> void:
+	if _hud == null:
+		return
+	_hud.refresh_floor(floor_index, get_total_floors(), dungeon_type_label)
 
 
 func _spawn_captain() -> void:
@@ -507,6 +968,7 @@ func _spawn_captain() -> void:
 	_captain.died.connect(_on_captain_died)
 	_entities.add_child(_captain)
 	_camera_ctrl.bind_captain(_captain)
+	_apply_meta_captain_bonuses()
 
 
 func _spawn_starting_followers() -> void:
@@ -540,6 +1002,8 @@ func _reposition_army_to_safe() -> void:
 
 
 func _spawn_portal() -> void:
+	if is_final_floor():
+		return
 	_portal = FloorPortal.new()
 	_portal.name = "FloorPortal"
 	var radius := _floor_cfg.portal_interact_radius if _floor_cfg != null else 90.0
@@ -552,9 +1016,90 @@ func _spawn_portal() -> void:
 	_entities.add_child(_portal)
 
 
+func _spawn_final_boss() -> void:
+	if _entities == null or _map == null:
+		return
+	var path := _floor_cfg.final_boss_path if _floor_cfg != null else "res://resources/units/boss.tres"
+	var def := _load_unit(path)
+	var boss := Boss.new()
+	boss.name = "FinalBoss"
+	var behavior_path := (
+		_floor_cfg.final_boss_behavior_path
+		if _floor_cfg != null
+		else "res://resources/combat/boss_summon_charge.tres"
+	)
+	var minion_path := (
+		_floor_cfg.final_boss_minion_path
+		if _floor_cfg != null
+		else "res://resources/units/boss_minion.tres"
+	)
+	var behavior_res := load(behavior_path)
+	var behavior: BossBehaviorConfig = null
+	if behavior_res is BossBehaviorConfig:
+		behavior = (behavior_res as BossBehaviorConfig).duplicate(true) as BossBehaviorConfig
+	var minion_def := _load_unit(minion_path)
+	if behavior != null:
+		boss.configure_behavior(behavior, minion_def)
+	boss.configure(def, _rng, false)
+	var at := _map.boss_room.center() if _map.boss_room != null else Vector2(1400, 1000)
+	boss.global_position = at
+	_occupied_spots.append(at)
+	boss.gold_dropped.connect(_on_gold_dropped)
+	boss.corpus_dropped.connect(_on_corpus_dropped)
+	boss.boss_defeated.connect(_on_final_boss_defeated)
+	_entities.add_child(boss)
+	_final_boss = boss
+
+
+func _spawn_shrines_initial() -> void:
+	var count := 1
+	if _corpus_cfg != null:
+		count = maxi(0, _corpus_cfg.start_shrine_count)
+	for _i in count:
+		_spawn_one_shrine(_sample_loot_spawn_pos())
+
+
+func _spawn_one_shrine(at: Vector2) -> FloorShrine:
+	if _entities == null:
+		return null
+	var shrine := FloorShrine.new()
+	shrine.name = "Shrine_%d" % _shrine_serial
+	_shrine_serial += 1
+	shrine.configure()
+	shrine.global_position = at
+	_entities.add_child(shrine)
+	_occupied_spots.append(at)
+	return shrine
+
+
+func _sample_loot_spawn_pos() -> Vector2:
+	if _map == null:
+		return Vector2(500, 500)
+	var avoid := _collect_live_avoid_positions()
+	var sep := _spawn_cfg.spawn_min_separation if _spawn_cfg != null else 90.0
+	var margin := _spawn_cfg.spawn_edge_margin if _spawn_cfg != null else 56.0
+	var pos := _map.sample_spawn_point(_rng, avoid, sep, margin, true, true)
+	_occupied_spots.append(pos)
+	return pos
+
+
 func _spawn_enemies_initial() -> void:
 	var count := _rng.randi_range(_spawn_cfg.start_enemy_min, _spawn_cfg.start_enemy_max)
-	_spawn_enemy_batch(count, false)
+	# Late floors add pressure; final floor keeps some trash but less than a full clear.
+	if _floor_cfg != null and floor_index > 1:
+		var bonus := _floor_cfg.late_floor_enemy_bonus
+		if is_final_floor():
+			bonus = maxi(0, bonus - 1)
+		count += bonus * (floor_index - 1)
+	if is_final_floor():
+		# Leave room for the boss encounter.
+		count = mini(count, _spawn_cfg.start_enemy_min + 2)
+	var elite_n := 1 if _corpus_cfg == null else maxi(0, _corpus_cfg.start_elite_count)
+	elite_n = mini(elite_n, count)
+	var grunt_n := maxi(0, count - elite_n)
+	_spawn_enemy_batch(grunt_n, false)
+	for _i in elite_n:
+		_spawn_one_enemy(_sample_loot_spawn_pos(), true)
 
 
 func _spawn_chests_initial() -> void:
@@ -695,26 +1240,44 @@ func _spawn_enemy_batch(want: int, respect_cap: bool) -> void:
 		_occupied_spots.append(pos)
 
 
-func _spawn_one_enemy(at: Vector2) -> Enemy:
+func _spawn_one_enemy(at: Vector2, as_elite: bool = false) -> Enemy:
 	var path := _floor_cfg.enemy_path if _floor_cfg != null else "res://resources/units/enemy_grunt.tres"
-	var def := _scale_enemy_def(_load_unit(path))
+	var def := _scale_enemy_def(_load_unit(path), as_elite)
 	var e := Enemy.new()
-	e.name = "Enemy_%d" % _enemy_serial
+	e.name = ("Elite_%d" % _enemy_serial) if as_elite else ("Enemy_%d" % _enemy_serial)
 	_enemy_serial += 1
-	e.configure(def, _rng)
+	e.configure(def, _rng, as_elite)
+	var corpus_amt := 0
+	if _corpus_cfg != null:
+		corpus_amt = _corpus_cfg.roll_kill_corpus(_rng, as_elite)
+	var ducat_override := -1
+	if as_elite and def != null and _corpus_cfg != null:
+		var lo := mini(def.gold_drop_min, def.gold_drop_max)
+		var hi := maxi(def.gold_drop_min, def.gold_drop_max)
+		var base_gold := _rng.randi_range(lo, hi) if hi > 0 else 1
+		ducat_override = maxi(1, int(round(float(base_gold) * maxf(1.0, _corpus_cfg.elite_ducat_multiplier))))
+	e.set_loot_overrides(corpus_amt, ducat_override)
 	e.global_position = at
 	e.gold_dropped.connect(_on_gold_dropped)
+	e.corpus_dropped.connect(_on_corpus_dropped)
 	_entities.add_child(e)
 	return e
 
 
-func _scale_enemy_def(def: UnitDefinition) -> UnitDefinition:
+func _scale_enemy_def(def: UnitDefinition, as_elite: bool = false) -> UnitDefinition:
 	if def == null:
 		return def
 	var scaled := def.duplicate(true) as UnitDefinition
 	var scale := _threat.get_enemy_stat_scale()
+	if as_elite and _corpus_cfg != null:
+		scale *= maxf(1.0, _corpus_cfg.elite_hp_multiplier)
 	scaled.max_hp = maxi(1, int(ceil(float(scaled.max_hp) * scale)))
-	scaled.attack_damage = maxi(1, int(round(float(scaled.attack_damage) * scale)))
+	var dmg_scale := _threat.get_enemy_stat_scale()
+	if as_elite and _corpus_cfg != null:
+		dmg_scale *= maxf(1.0, _corpus_cfg.elite_damage_multiplier)
+	scaled.attack_damage = maxi(1, int(round(float(scaled.attack_damage) * dmg_scale)))
+	if as_elite:
+		scaled.display_name = "精英·%s" % scaled.display_name
 	return scaled
 
 
@@ -786,10 +1349,15 @@ func spawn_hostile_minion(def: UnitDefinition, at: Vector2) -> Enemy:
 		return null
 	var e := Enemy.new()
 	e.name = "BossMinion_%d" % _entities.get_child_count()
-	e.configure(def, _rng)
+	e.configure(def, _rng, false)
+	var corpus_amt := 0
+	if _corpus_cfg != null:
+		corpus_amt = _corpus_cfg.roll_kill_corpus(_rng, false)
+	e.set_loot_overrides(corpus_amt, -1)
 	e.global_position = at
 	e.aggro_range = 200.0
 	e.gold_dropped.connect(_on_gold_dropped)
+	e.corpus_dropped.connect(_on_corpus_dropped)
 	_entities.add_child(e)
 	return e
 
@@ -797,14 +1365,157 @@ func spawn_hostile_minion(def: UnitDefinition, at: Vector2) -> Enemy:
 func recruit_unit(def: UnitDefinition) -> void:
 	if def == null or _captain == null:
 		return
+	_spawn_follower_from_roster(def.duplicate(true) as UnitDefinition)
+	_try_auto_merge()
+	_refresh_oaths()
+
+
+func _spawn_follower_from_roster(roster_def: UnitDefinition) -> SquadMember:
+	if roster_def == null or _captain == null or _entities == null:
+		return null
 	var member := SquadMember.new()
 	var index := _followers.size()
 	member.name = "Ally_%d" % index
-	member.configure_as_follower(def, _captain, index)
-	member.global_position = _captain.global_position + Vector2(30, 30)
+	var mult := 1.0
+	if _merge_cfg != null:
+		mult = _merge_cfg.multiplier_for_rank(int(roster_def.rank))
+	member.configure_as_follower(roster_def, _captain, index, mult)
+	var angle := float(index + 1) * TAU / 5.0
+	var radius := _merge_cfg.revive_spawn_radius if _merge_cfg != null else 48.0
+	member.global_position = _captain.global_position + Vector2(cos(angle), sin(angle)) * radius
 	member.combat_enabled = not ui_blocking and not game_over and run_phase == RunPhase.FLOOR
+	if not member.died.is_connected(_on_follower_died):
+		member.died.connect(_on_follower_died)
 	_entities.add_child(member)
 	_followers.append(member)
+	return member
+
+
+func _on_follower_died(who: Combatant) -> void:
+	var sm := who as SquadMember
+	if sm == null or sm.is_captain:
+		return
+	var roster := _roster_def_of(sm)
+	var idx := _followers.find(sm)
+	if idx >= 0:
+		_followers.remove_at(idx)
+		_reindex_followers()
+	_enqueue_follower_def(roster)
+	_refresh_revive_hud()
+	_refresh_oaths()
+
+
+func _roster_def_of(member: SquadMember) -> UnitDefinition:
+	if member == null:
+		return null
+	if member.roster_definition != null:
+		return member.roster_definition.duplicate(true) as UnitDefinition
+	if member.definition != null:
+		return member.definition.duplicate(true) as UnitDefinition
+	return null
+
+
+func _enqueue_follower_def(def: UnitDefinition) -> void:
+	if def == null or _revive_queue == null:
+		return
+	var sec := _merge_cfg.base_revive_time() if _merge_cfg != null else 8.0
+	# Include the unit about to enter the queue so champion keywords still count.
+	var roster_for_oath := get_army_roster_defs()
+	roster_for_oath.append(def)
+	if _oath_service != null:
+		sec *= _oath_service.revive_time_multiplier(roster_for_oath)
+	if _relics != null:
+		sec *= _relics.revive_time_multiplier()
+	_revive_queue.enqueue(def, sec)
+
+
+func _tick_revive_queue(delta: float) -> void:
+	if _revive_queue == null or game_over:
+		return
+	var ready := _revive_queue.tick(delta)
+	for def in ready:
+		_spawn_follower_from_roster(def)
+	if not ready.is_empty():
+		_try_auto_merge()
+		_refresh_oaths()
+		if _hud != null:
+			var first: UnitDefinition = ready[0]
+			var msg := "复活 %s" % (first.display_name if first != null else "随从")
+			_hud.set_world_hint(msg)
+	_refresh_revive_hud()
+
+
+func _try_auto_merge() -> void:
+	if _merge_rebuild_guard or _captain == null:
+		return
+	var living_defs: Array = []
+	for m in _followers:
+		if m == null or not is_instance_valid(m) or m.is_dead:
+			continue
+		var d := _roster_def_of(m)
+		if d != null:
+			living_defs.append(d)
+	var queued_defs: Array = _revive_queue.get_defs() if _revive_queue != null else []
+	var result := UnitMergeService.auto_merge(living_defs, queued_defs)
+	var merges: Array = result.get("merges", [])
+	if merges.is_empty():
+		return
+	_merge_rebuild_guard = true
+	# Rebuild living followers from merge result.
+	var keep_nodes: Array[SquadMember] = _followers.duplicate()
+	_followers.clear()
+	for m in keep_nodes:
+		if m == null or not is_instance_valid(m):
+			continue
+		if m.died.is_connected(_on_follower_died):
+			m.died.disconnect(_on_follower_died)
+		if m.get_parent() != null:
+			m.get_parent().remove_child(m)
+		m.free()
+	if _revive_queue != null:
+		_revive_queue.clear()
+		for qd in result.get("queued", []):
+			var qdef := qd as UnitDefinition
+			if qdef != null:
+				_enqueue_follower_def(qdef)
+	for ld in result.get("living", []):
+		var ldef := ld as UnitDefinition
+		if ldef != null:
+			_spawn_follower_from_roster(ldef)
+	_merge_rebuild_guard = false
+	_emit_merge_feedback(merges)
+	_refresh_revive_hud()
+	_refresh_oaths()
+	if run_phase == RunPhase.INTERSTITIAL:
+		_refresh_shop_hud()
+
+
+func _emit_merge_feedback(merges: Array) -> void:
+	if merges.is_empty():
+		return
+	var parts: PackedStringArray = PackedStringArray()
+	for m in merges:
+		var info: Dictionary = m
+		var to_rank := int(info.get("to_rank", 0))
+		var name_str := str(info.get("name", "?"))
+		var label := UnitMergeService.rank_label(to_rank)
+		var kw := StringName(str(info.get("keyword", &"")))
+		var line := "合兵 → %s·%s" % [label, name_str]
+		if to_rank >= UnitMergeService.RANK_CHAMPION and kw != &"":
+			line += " [%s]" % String(kw)
+		parts.append(line)
+		print("PHASE_C_MERGE ", line)
+	_last_merge_log = " · ".join(parts)
+	_shop_status = _last_merge_log
+	if _hud != null:
+		_hud.set_world_hint(_last_merge_log)
+	if _captain != null and is_instance_valid(_captain) and _entities != null:
+		DamagePopup.spawn_text(
+			_entities,
+			_captain.global_position,
+			_last_merge_log,
+			Color(1.0, 0.88, 0.35, 1.0)
+		)
 
 
 func _on_shop_buy(slot_index: int) -> void:
@@ -821,6 +1532,23 @@ func _on_shop_upgrade() -> void:
 
 func _on_shop_sell(follower_index: int) -> void:
 	_try_shop_sell(follower_index)
+
+
+func _on_relic_buy(slot_index: int) -> void:
+	_try_relic_buy(slot_index)
+
+
+func _on_relic_refresh() -> void:
+	_try_relic_refresh()
+
+
+func _on_shrine_interact_pressed() -> void:
+	if _focused_shrine != null and not _focused_shrine.is_used():
+		_open_shrine_choice(_focused_shrine)
+
+
+func _on_shrine_choice(choice_index: int) -> void:
+	_resolve_shrine_choice(choice_index)
 
 
 func _try_shop_buy(slot_index: int) -> Dictionary:
@@ -894,6 +1622,7 @@ func _try_shop_sell(follower_index: int) -> Dictionary:
 	_reindex_followers()
 	gold += refund
 	_shop_status = "出售 +%d" % refund
+	_refresh_oaths()
 	_refresh_shop_hud()
 	return {"ok": true, "code": &"ok", "refund": refund}
 
@@ -908,27 +1637,100 @@ func _reindex_followers() -> void:
 
 
 func _collect_owned_type_ids() -> Array:
+	## Army roster domain: living + revive queue (queued still count for type cap / oaths).
 	var ids: Array = []
 	for m in _followers:
-		if m == null or not is_instance_valid(m) or m.is_dead:
+		if m == null or not is_instance_valid(m):
 			continue
-		if m.definition == null:
+		var d := _roster_def_of(m)
+		if d == null:
 			continue
-		ids.append(m.definition.id)
+		ids.append(d.id)
+	if _revive_queue != null:
+		for qd in _revive_queue.get_defs():
+			var qdef := qd as UnitDefinition
+			if qdef != null:
+				ids.append(qdef.id)
 	return ids
 
 
 func _army_rows_for_hud() -> Array:
+	## Shop sell list: living / on-field roster only (queued still belong to army but not sold here).
 	var rows: Array = []
 	for i in _followers.size():
 		var m := _followers[i]
-		if m == null or not is_instance_valid(m):
+		if m == null or not is_instance_valid(m) or m.is_dead:
 			continue
-		var def: UnitDefinition = m.definition
+		var def: UnitDefinition = _roster_def_of(m)
 		var name_str := def.display_name if def != null else "?"
+		var rank := int(def.rank) if def != null else 0
+		var rank_lbl := UnitMergeService.rank_label(rank)
+		var kw := def.keyword if def != null else &""
+		var label := "%s·%s" % [rank_lbl, name_str]
+		if rank >= UnitMergeService.RANK_CHAMPION and kw != &"":
+			label += " [%s]" % String(kw)
 		var refund := _shop.sell_refund(def) if _shop != null else 0
-		rows.append({"index": i, "name": name_str, "refund": refund})
+		rows.append({
+			"index": i,
+			"name": label,
+			"refund": refund,
+			"rank": rank,
+			"keyword": kw,
+		})
 	return rows
+
+
+func _refresh_revive_hud() -> void:
+	if _hud == null:
+		return
+	_hud.refresh_revive_queue(get_revive_queue_rows())
+
+
+func _refresh_oaths() -> void:
+	_apply_oath_effects_to_army()
+	if _hud == null:
+		return
+	_hud.refresh_oaths(get_oath_rows())
+
+
+func _refresh_relic_hud() -> void:
+	if _hud == null:
+		return
+	var max_slots := _relics.max_slots() if _relics != null else 3
+	_hud.refresh_relics(get_relic_rows(), max_slots)
+
+
+func _apply_oath_effects_to_army() -> void:
+	var roster := get_army_roster_defs()
+	var dr := 1.0
+	var ranged_dmg := 1.0
+	var ranged_iv := 1.0
+	if _oath_service != null:
+		dr = _oath_service.damage_taken_multiplier(roster)
+		ranged_dmg = _oath_service.ranged_damage_multiplier(roster)
+		ranged_iv = _oath_service.ranged_interval_multiplier(roster)
+	var relic_dr := _relics.damage_taken_multiplier() if _relics != null else 1.0
+	var relic_atk := _relics.attack_damage_multiplier() if _relics != null else 1.0
+	dr *= relic_dr
+	for m in _followers:
+		if m == null or not is_instance_valid(m) or m.is_dead:
+			continue
+		m.incoming_damage_multiplier = dr
+		var kw := &""
+		if m.roster_definition != null:
+			kw = m.roster_definition.keyword
+		elif m.definition != null:
+			kw = m.definition.keyword
+		if _oath_service != null and _oath_service.applies_ranged_to(kw) and kw == &"射术":
+			m.oath_damage_multiplier = ranged_dmg * relic_atk
+			m.oath_attack_interval_multiplier = ranged_iv
+		else:
+			m.oath_damage_multiplier = relic_atk
+			m.oath_attack_interval_multiplier = 1.0
+	if _captain != null and is_instance_valid(_captain) and not _captain.is_dead:
+		_captain.incoming_damage_multiplier = dr
+		_captain.oath_damage_multiplier = 1.0
+		_captain.oath_attack_interval_multiplier = 1.0
 
 
 func _refresh_shop_hud() -> void:
@@ -936,6 +1738,10 @@ func _refresh_shop_hud() -> void:
 		return
 	var type_cap := _shop_cfg.max_unit_types if _shop_cfg != null else 6
 	var type_count := _shop.count_unique_types(_collect_owned_type_ids())
+	var relic_shelf: Array = _relics.shelf if _relics != null else []
+	var relic_refresh := _relics.get_refresh_cost() if _relics != null else 2
+	var owned_relics := get_relic_rows()
+	var max_slots := _relics.max_slots() if _relics != null else 3
 	_hud.show_shop_interstitial(
 		floor_index,
 		_shop.shelf,
@@ -947,7 +1753,13 @@ func _refresh_shop_hud() -> void:
 		_army_rows_for_hud(),
 		type_count,
 		type_cap,
-		_shop_status
+		_shop_status,
+		corpus,
+		relic_shelf,
+		relic_refresh,
+		owned_relics,
+		max_slots,
+		_relic_status
 	)
 
 
@@ -969,6 +1781,126 @@ func _shop_fail_message(code: StringName) -> String:
 			return "无法完成操作"
 
 
+func _try_relic_buy(slot_index: int) -> Dictionary:
+	if run_phase != RunPhase.INTERSTITIAL or game_over or _relics == null:
+		return {"ok": false, "code": &"wrong_phase"}
+	var result := _relics.try_buy(slot_index, corpus)
+	if not bool(result.get("ok", false)):
+		_relic_status = _relic_fail_message(StringName(str(result.get("code", &""))))
+		_refresh_shop_hud()
+		return result
+	var cost := int(result.get("cost", 0))
+	var relic: RelicDefinition = result.get("relic") as RelicDefinition
+	corpus = maxi(0, corpus - cost)
+	_relic_status = "购入遗物 %s (-%d尸骸)" % [
+		relic.display_name if relic != null else "?",
+		cost,
+	]
+	_refresh_oaths()
+	_refresh_relic_hud()
+	_refresh_shop_hud()
+	return result
+
+
+func _try_relic_refresh() -> Dictionary:
+	if run_phase != RunPhase.INTERSTITIAL or game_over or _relics == null:
+		return {"ok": false, "code": &"wrong_phase"}
+	var result := _relics.try_refresh(corpus, _rng)
+	if not bool(result.get("ok", false)):
+		_relic_status = _relic_fail_message(StringName(str(result.get("code", &""))))
+		_refresh_shop_hud()
+		return result
+	var cost := int(result.get("cost", 0))
+	corpus = maxi(0, corpus - cost)
+	_relic_status = "遗物货架已刷新 (-%d尸骸)" % cost
+	_refresh_shop_hud()
+	return result
+
+
+func _relic_fail_message(code: StringName) -> String:
+	match code:
+		RelicService.RESULT_NOT_ENOUGH:
+			return "尸骸不足"
+		RelicService.RESULT_SLOTS_FULL:
+			return "遗物槽已满"
+		RelicService.RESULT_SOLD_OUT:
+			return "该遗物已售出"
+		RelicService.RESULT_BAD_SLOT:
+			return "无效遗物槽"
+		RelicService.RESULT_NO_POOL:
+			return "遗物池为空"
+		_:
+			return "无法购买遗物"
+
+
+func _update_shrine_focus() -> void:
+	_focused_shrine = null
+	if ui_blocking or game_over or _shrine_choice_open or not is_inside_tree():
+		if _hud != null:
+			_hud.set_shrine_prompt_visible(false)
+		return
+	if _captain == null or not is_instance_valid(_captain):
+		return
+	var radius := _corpus_cfg.shrine_interact_radius if _corpus_cfg != null else 90.0
+	var best_dist := radius
+	for node in get_tree().get_nodes_in_group(&"shrines"):
+		if node == null or not is_instance_valid(node):
+			continue
+		var shrine := node as FloorShrine
+		if shrine == null or shrine.is_used():
+			continue
+		var dist := _captain.global_position.distance_to(shrine.global_position)
+		if dist <= best_dist:
+			best_dist = dist
+			_focused_shrine = shrine
+	if _hud != null:
+		_hud.set_shrine_prompt_visible(_focused_shrine != null)
+
+
+func _open_shrine_choice(shrine: FloorShrine) -> void:
+	if shrine == null or shrine.is_used() or _shrine_choice_open or game_over:
+		return
+	if run_phase != RunPhase.FLOOR:
+		return
+	_shrine_choice_open = true
+	ui_blocking = true
+	_focused_shrine = shrine
+	if _hud != null:
+		_hud.show_shrine_choice("选择神龛恩惠")
+
+
+func _resolve_shrine_choice(choice_index: int) -> void:
+	if not _shrine_choice_open:
+		return
+	var shrine := _focused_shrine
+	_shrine_choice_open = false
+	ui_blocking = false
+	if _hud != null:
+		_hud.hide_shrine_choice()
+	if shrine == null or not is_instance_valid(shrine) or shrine.is_used():
+		return
+	shrine.mark_used()
+	if choice_index == 0:
+		# Short attack buff.
+		var dur := 12.0
+		if _corpus_cfg != null:
+			dur = maxf(1.0, _corpus_cfg.shrine_buff_duration_sec)
+		_shrine_buff_left = dur
+		_refresh_temp_damage_mults()
+		if _hud != null:
+			_hud.set_world_hint("神龛：短时攻击强化 %.0fs" % dur)
+	else:
+		var reward := 3
+		if _corpus_cfg != null:
+			reward = maxi(1, _corpus_cfg.shrine_corpus_reward)
+		_on_corpus_collected(reward)
+		if _hud != null:
+			_hud.set_world_hint("神龛：获得 %d 尸骸" % reward)
+	_focused_shrine = null
+	if _hud != null:
+		_hud.set_shrine_prompt_visible(false)
+
+
 func _init_shop_service() -> void:
 	var pool: Array[UnitDefinition] = []
 	if _shop_cfg != null:
@@ -977,6 +1909,42 @@ func _init_shop_service() -> void:
 			if def != null:
 				pool.append(def)
 	_shop.configure(_shop_cfg, pool)
+
+
+func _init_relic_service() -> void:
+	_corpus_cfg = _load_corpus_relics_config()
+	var pool: Array[RelicDefinition] = []
+	if _corpus_cfg != null:
+		for path in _corpus_cfg.relic_pool_paths:
+			var res := load(str(path))
+			if res is RelicDefinition:
+				pool.append((res as RelicDefinition).duplicate(true) as RelicDefinition)
+			else:
+				push_error("GameController: failed to load RelicDefinition %s" % path)
+	_relics.configure(_corpus_cfg, pool)
+
+
+func _load_corpus_relics_config() -> CorpusRelicsConfig:
+	var res := load(PATH_CORPUS_RELICS)
+	if res is CorpusRelicsConfig:
+		return (res as CorpusRelicsConfig).duplicate(true) as CorpusRelicsConfig
+	push_warning("GameController: missing corpus_relics.tres, using defaults")
+	return CorpusRelicsConfig.new()
+
+
+func _init_oath_service() -> void:
+	var defs: Array[OathDefinition] = []
+	for path in [
+		PATH_OATH_IRON_WALL,
+		PATH_OATH_MYRIAD_BONES,
+		PATH_OATH_TAUT_BOW,
+	]:
+		var res := load(str(path))
+		if res is OathDefinition:
+			defs.append((res as OathDefinition).duplicate(true) as OathDefinition)
+		else:
+			push_error("GameController: failed to load OathDefinition %s" % path)
+	_oath_service.configure(defs)
 
 
 func _count_alive_enemies() -> int:
@@ -1011,12 +1979,16 @@ func _on_chest_smashed(chest: RoamChest, placeholder_gold: int) -> void:
 	var amount := placeholder_gold
 	if _shop_cfg != null:
 		amount = maxi(1, _shop_cfg.chest_ducats)
-	if amount <= 0:
-		return
 	var at := _captain.global_position if _captain != null else Vector2.ZERO
 	if chest != null and is_instance_valid(chest):
 		at = chest.global_position
-	_on_gold_dropped(amount, at)
+	if amount > 0:
+		_on_gold_dropped(amount, at)
+	var corpus_amt := 0
+	if _corpus_cfg != null:
+		corpus_amt = _corpus_cfg.roll_chest_corpus(_rng)
+	if corpus_amt > 0:
+		_on_corpus_dropped(corpus_amt, at + Vector2(18, 8))
 
 
 func _on_gold_dropped(amount: int, at: Vector2) -> void:
@@ -1030,6 +2002,19 @@ func _on_gold_dropped(amount: int, at: Vector2) -> void:
 	drop.collected.connect(_on_gold_collected)
 
 
+func _on_corpus_dropped(amount: int, at: Vector2) -> void:
+	if game_over or amount <= 0:
+		return
+	var bonus := _relics.corpus_find_bonus() if _relics != null else 0
+	var total := amount + bonus
+	var drop := CorpusPickup.new()
+	drop.name = "CorpusPickup"
+	_entities.add_child(drop)
+	drop.global_position = at
+	drop.configure(total)
+	drop.collected.connect(_on_corpus_collected)
+
+
 func _on_gold_collected(amount: int) -> void:
 	if game_over:
 		return
@@ -1038,19 +2023,219 @@ func _on_gold_collected(amount: int) -> void:
 		_hud.refresh_gold(gold)
 
 
-func _on_captain_died(_who: Combatant) -> void:
+func _on_corpus_collected(amount: int) -> void:
 	if game_over:
 		return
+	corpus += amount
+	if _hud != null:
+		_hud.refresh_corpus(corpus)
+
+
+func _on_final_boss_defeated(_boss: Boss) -> void:
+	if game_over or run_outcome != RunOutcome.NONE:
+		return
+	_end_run(RunOutcome.VICTORY)
+
+
+func _on_captain_died(_who: Combatant) -> void:
+	if game_over or run_outcome != RunOutcome.NONE:
+		return
+	_end_run(RunOutcome.DEFEAT)
+
+
+func _end_run(outcome: RunOutcome) -> void:
+	if game_over:
+		return
+	run_outcome = outcome
 	game_over = true
 	run_phase = RunPhase.GAME_OVER
 	ui_blocking = true
 	_set_combat_enabled(false)
+	_portal_holding = false
+	_shrine_choice_open = false
+	if _meta != null:
+		_meta.award_for_outcome(outcome == RunOutcome.VICTORY)
+		_meta.save_to_disk()
 	if _hud != null:
-		_hud.show_end(false)
+		_hud.show_end(outcome == RunOutcome.VICTORY, get_run_stats())
+		_refresh_meta_hud()
 
 
 func _on_restart() -> void:
 	get_tree().reload_current_scene()
+
+
+func _on_main_menu() -> void:
+	# Single-scene prototype: reload main entry (presentation hook for a future menu).
+	get_tree().reload_current_scene()
+
+
+func _on_character_confirm(character_id: StringName) -> void:
+	var pick := character_id
+	if pick == &"" and _hud != null:
+		pick = _hud.get_pending_character_id()
+	if _awaiting_character_select or not _run_started:
+		_begin_run_with_character(pick)
+		return
+	# Mid-run: only persist preferred character for the next run.
+	if _meta == null:
+		return
+	var result := _meta.try_select_character(pick)
+	if bool(result.get("ok", false)):
+		_meta.save_to_disk()
+		if _hud != null:
+			_hud.hide_character_select()
+		_refresh_meta_hud()
+	elif _hud != null:
+		_hud.refresh_character_select(
+			_meta.list_characters(),
+			_meta.list_skill_nodes(pick),
+			_meta.skill_points,
+			str(result.get("lock_reason", "未解锁"))
+		)
+
+
+func _on_character_row(character_id: StringName) -> void:
+	if _meta == null or _hud == null:
+		return
+	# Preview skill tree for the highlighted character (no unlock bypass).
+	var status := ""
+	if not _meta.is_character_unlocked(character_id):
+		status = _meta.get_lock_reason(character_id)
+	_hud.refresh_character_select(
+		_meta.list_characters(),
+		_meta.list_skill_nodes(character_id),
+		_meta.skill_points,
+		status
+	)
+	# Keep pending highlight even if locked (confirm will reject).
+	_hud.set_pending_character_id(character_id)
+
+
+func _on_skill_buy(node_id: StringName) -> void:
+	if _meta == null:
+		return
+	var result := _meta.try_purchase_node(node_id)
+	if bool(result.get("ok", false)):
+		_meta.save_to_disk()
+	_refresh_meta_hud()
+	if _hud != null and (_awaiting_character_select or _hud.is_character_select_visible()):
+		var preview := _hud.get_pending_character_id()
+		if preview == &"":
+			preview = _meta.selected_character_id
+		var status := ""
+		if not bool(result.get("ok", false)):
+			status = str(result.get("code", "购买失败"))
+		_hud.refresh_character_select(
+			_meta.list_characters(),
+			_meta.list_skill_nodes(preview),
+			_meta.skill_points,
+			status
+		)
+
+
+func _on_meta_panel_open() -> void:
+	if game_over:
+		return
+	_open_character_select(false)
+
+
+func _init_meta_service() -> void:
+	_meta_cfg = _load_meta_progress_config()
+	var path := meta_save_path_override
+	_meta.configure(_meta_cfg, path)
+	_meta.load_from_disk()
+
+
+func _load_meta_progress_config() -> MetaProgressConfig:
+	var res := load(PATH_META_PROGRESS)
+	if res is MetaProgressConfig:
+		return (res as MetaProgressConfig).duplicate(true) as MetaProgressConfig
+	push_warning("GameController: missing meta_progress.tres, using code defaults")
+	return MetaProgressConfig.make_default()
+
+
+func _wants_character_select_gate() -> bool:
+	return not meta_auto_start
+
+
+func _open_character_select(gate_run_start: bool) -> void:
+	_awaiting_character_select = gate_run_start
+	if gate_run_start:
+		ui_blocking = true
+		_set_combat_enabled(false)
+	if _hud == null or _meta == null:
+		return
+	_hud.show_character_select(
+		_meta.list_characters(),
+		_meta.list_skill_nodes(_meta.preferred_character_id()),
+		_meta.skill_points,
+		gate_run_start
+	)
+
+
+func _begin_run_with_character(character_id: StringName) -> Dictionary:
+	if _meta == null:
+		return {"ok": false, "code": MetaProgressService.RESULT_UNKNOWN}
+	var pick_id := character_id
+	if pick_id == &"":
+		pick_id = _meta.preferred_character_id()
+	var result := _meta.try_select_character(pick_id)
+	if not bool(result.get("ok", false)):
+		# Keep gate open; surface lock reason in HUD.
+		if _hud != null:
+			_hud.refresh_character_select(
+				_meta.list_characters(),
+				_meta.list_skill_nodes(pick_id),
+				_meta.skill_points,
+				str(result.get("lock_reason", "未解锁"))
+			)
+		return result
+	_meta.save_to_disk()
+	_awaiting_character_select = false
+	if _hud != null:
+		_hud.hide_character_select()
+	_apply_meta_starting_bonuses()
+	if not _run_started:
+		_start_floor(true)
+		_run_started = true
+	else:
+		# Mid-session re-pick (from meta panel): apply ducat bonus delta only once per run start.
+		pass
+	ui_blocking = false
+	_set_combat_enabled(true)
+	_refresh_meta_hud()
+	return result
+
+
+func _apply_meta_starting_bonuses() -> void:
+	if _meta == null:
+		return
+	var base_ducats := _shop_cfg.starting_ducats if _shop_cfg != null else 20
+	gold = base_ducats + _meta.get_starting_ducats_bonus()
+	if _hud != null:
+		_hud.refresh_gold(gold)
+
+
+func _apply_meta_captain_bonuses() -> void:
+	if _meta == null or _captain == null or not is_instance_valid(_captain):
+		return
+	var bonus := _meta.get_starting_hp_bonus()
+	if bonus <= 0:
+		return
+	if _captain.definition != null:
+		_captain.definition.max_hp = maxi(1, _captain.definition.max_hp + bonus)
+	_captain.current_hp = maxi(_captain.current_hp, _captain.definition.max_hp if _captain.definition != null else _captain.current_hp + bonus)
+
+
+func _refresh_meta_hud() -> void:
+	if _hud == null or _meta == null:
+		return
+	_hud.refresh_meta_summary(
+		_meta.skill_points,
+		String(_meta.selected_character_id),
+		_meta.list_characters()
+	)
 
 
 func _refresh_threat_hud() -> void:
@@ -1088,9 +2273,13 @@ func _load_floor_run_config() -> FloorRunConfig:
 func _load_threat_config() -> ThreatConfig:
 	var res := load(PATH_THREAT)
 	if res is ThreatConfig:
-		return (res as ThreatConfig).duplicate(true) as ThreatConfig
+		var cfg := (res as ThreatConfig).duplicate(true) as ThreatConfig
+		_base_threat_ramp = cfg.ramp_duration
+		return cfg
 	push_error("GameController: failed to load ThreatConfig %s" % PATH_THREAT)
-	return ThreatConfig.new()
+	var fallback := ThreatConfig.new()
+	_base_threat_ramp = fallback.ramp_duration
+	return fallback
 
 
 func _load_shop_economy() -> ShopEconomyConfig:
@@ -1099,6 +2288,14 @@ func _load_shop_economy() -> ShopEconomyConfig:
 		return (res as ShopEconomyConfig).duplicate(true) as ShopEconomyConfig
 	push_error("GameController: failed to load ShopEconomyConfig %s" % PATH_SHOP_ECONOMY)
 	return ShopEconomyConfig.new()
+
+
+func _load_merge_rank_config() -> MergeRankConfig:
+	var res := load(PATH_MERGE_RANK)
+	if res is MergeRankConfig:
+		return (res as MergeRankConfig).duplicate(true) as MergeRankConfig
+	push_error("GameController: failed to load MergeRankConfig %s" % PATH_MERGE_RANK)
+	return MergeRankConfig.new()
 
 
 func _load_unit(path: String) -> UnitDefinition:

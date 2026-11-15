@@ -6,7 +6,7 @@
 [resource]
 script = ExtResource("1_script")
 id = &"ally_axe"
-display_name = "斧手"
+display_name = "战斧手"
 max_hp = 80
 attack_damage = 12
 attack_interval = 0.95
@@ -18,3 +18,5 @@ gold_drop_min = 0
 gold_drop_max = 0
 shop_price = 5
 rarity_tier = 2
+rank = 0
+keyword = &"近战"

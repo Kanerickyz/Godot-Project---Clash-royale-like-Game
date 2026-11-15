@@ -12,6 +12,11 @@ runners=(
   "res://scripts/core/project_load_smoke_test_runner.gd"
   "res://scripts/core/phase_a_floor_loop_test_runner.gd"
   "res://scripts/core/phase_b_shop_economy_test_runner.gd"
+  "res://scripts/core/phase_c_merge_revive_test_runner.gd"
+  "res://scripts/core/phase_d_oaths_test_runner.gd"
+  "res://scripts/core/phase_e_corpus_relics_test_runner.gd"
+  "res://scripts/core/phase_f_run_victory_test_runner.gd"
+  "res://scripts/core/phase_g_meta_progress_test_runner.gd"
 )
 
 failed=0
