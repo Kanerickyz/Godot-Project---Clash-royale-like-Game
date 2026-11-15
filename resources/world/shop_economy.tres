@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="ShopEconomyConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/shop_economy_config.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+starting_ducats = 20
+chest_ducats = 8
+interest_gold_per_point = 10
+interest_max = 5
+shelf_slot_count = 3
+refresh_cost = 2
+max_unit_types = 6
+sell_refund_ratio = 0.5
+rarity_prices = PackedInt32Array(3, 5, 8)
+recruit_level_min = 1
+recruit_level_max = 5
+recruit_upgrade_costs = PackedInt32Array(4, 6, 8, 10)
+rarity_weights_by_level = PackedInt32Array(80, 18, 2, 65, 28, 7, 50, 35, 15, 35, 40, 25, 20, 40, 40)
+pool_unit_paths = PackedStringArray("res://resources/units/ally_skeleton.tres", "res://resources/units/ally_spear.tres", "res://resources/units/ally_shield.tres", "res://resources/units/ally_axe.tres", "res://resources/units/ally_archer.tres", "res://resources/units/ally_hunter.tres", "res://resources/units/ally_musket.tres")

@@ -1,11 +1,12 @@
 class_name GameHud
 extends CanvasLayer
-## Phase A HUD: threat, floor, commands, interstitial stub, end screen.
-## Legacy shop/chest-pick panels remain hidden (Phase B+).
+## Phase B HUD: threat/floor/ducats, interstitial shop (buy/refresh/level/sell), end screen.
 
 
 signal shop_buy_pressed(slot_index: int)
 signal shop_refresh_pressed
+signal shop_upgrade_pressed
+signal shop_sell_pressed(follower_index: int)
 signal shop_closed
 signal chest_pick_pressed(choice_index: int)
 signal restart_pressed
@@ -28,7 +29,13 @@ var _threat_bar_fill: StyleBoxFlat
 var _floor_label: Label
 var _hint_label: Label
 var _shop_panel: PanelContainer
+var _shop_title: Label
+var _shop_status: Label
 var _shop_list: VBoxContainer
+var _shop_army_list: VBoxContainer
+var _shop_refresh_btn: Button
+var _shop_upgrade_btn: Button
+var _shop_next_btn: Button
 var _chest_panel: PanelContainer
 var _chest_list: HBoxContainer
 var _end_panel: PanelContainer
@@ -61,8 +68,7 @@ func get_joystick_vector() -> Vector2:
 func refresh_gold(amount: int) -> void:
 	gold = amount
 	if _gold_label != null:
-		# Phase A: pickup placeholder only; not a shop-driving wallet.
-		_gold_label.text = "达克特(占位): %d" % gold
+		_gold_label.text = "达克特: %d" % gold
 
 
 func refresh_threat(multiplier: float, tier_label: String, tier_index: int) -> void:
@@ -117,8 +123,9 @@ func set_portal_prompt_visible(visible_on: bool) -> void:
 
 
 func show_interstitial(floor_cleared: int) -> void:
+	# Legacy stub path: prefer show_shop_interstitial from GameController.
 	if _interstitial_label != null:
-		_interstitial_label.text = "离开第 %d 层\n层间营地（占位，无商店）" % floor_cleared
+		_interstitial_label.text = "离开第 %d 层\n层间营地" % floor_cleared
 	if _interstitial_panel != null:
 		_interstitial_panel.visible = true
 	if _shop_panel != null:
@@ -132,19 +139,81 @@ func show_interstitial(floor_cleared: int) -> void:
 	set_portal_prompt_visible(false)
 
 
+func show_shop_interstitial(
+	floor_cleared: int,
+	shelf: Array,
+	current_gold: int,
+	refresh_cost: int,
+	recruit_level: int,
+	upgrade_cost: int,
+	interest_gained: int,
+	army_rows: Array,
+	type_count: int,
+	type_cap: int,
+	status_text: String = ""
+) -> void:
+	refresh_gold(current_gold)
+	if _interstitial_panel != null:
+		_interstitial_panel.visible = false
+	if _chest_panel != null:
+		_chest_panel.visible = false
+	if _end_panel != null:
+		_end_panel.visible = false
+	if _cmd_row != null:
+		_cmd_row.visible = false
+	set_portal_prompt_visible(false)
+	if _shop_title != null:
+		var interest_line := ""
+		if interest_gained > 0:
+			interest_line = " · 利息 +%d" % interest_gained
+		elif interest_gained == 0:
+			interest_line = " · 利息 +0"
+		_shop_title.text = "第 %d 层后 · 招兵店%s" % [floor_cleared, interest_line]
+	_rebuild_shop_shelf(shelf, current_gold)
+	_rebuild_shop_army(army_rows)
+	if _shop_refresh_btn != null:
+		_shop_refresh_btn.text = "刷新 (-%d)" % maxi(0, refresh_cost)
+		_shop_refresh_btn.disabled = current_gold < refresh_cost
+	if _shop_upgrade_btn != null:
+		if upgrade_cost < 0:
+			_shop_upgrade_btn.text = "招募等级 Lv%d (满)" % recruit_level
+			_shop_upgrade_btn.disabled = true
+		else:
+			_shop_upgrade_btn.text = "招募等级 Lv%d → (-%d)" % [recruit_level, upgrade_cost]
+			_shop_upgrade_btn.disabled = current_gold < upgrade_cost
+	if _shop_status != null:
+		var base := "种类 %d/%d" % [type_count, type_cap]
+		if status_text != "":
+			base = "%s · %s" % [base, status_text]
+		_shop_status.text = base
+	if _shop_panel != null:
+		_shop_panel.visible = true
+
+
 func hide_interstitial() -> void:
 	if _interstitial_panel != null:
 		_interstitial_panel.visible = false
+	if _shop_panel != null:
+		_shop_panel.visible = false
 	if _cmd_row != null:
 		_cmd_row.visible = true
 
 
 func show_shop(shelf: Array[Dictionary], current_gold: int, refresh_cost: int = 10) -> void:
-	# Phase A: shop UI disabled; keep API so old signals do not crash callers.
-	refresh_gold(current_gold)
-	hide_shop()
-	if shelf.is_empty() and refresh_cost < 0:
-		pass
+	# Compatibility shim: open a minimal shop view without army/interest.
+	show_shop_interstitial(
+		0,
+		shelf,
+		current_gold,
+		refresh_cost,
+		1,
+		-1,
+		0,
+		[],
+		0,
+		6,
+		""
+	)
 
 
 func hide_shop() -> void:
@@ -153,7 +222,7 @@ func hide_shop() -> void:
 
 
 func show_chest_pick(choices: Array) -> void:
-	# Phase A: three-pick recruit disabled.
+	# Phase B: three-pick recruit still disabled.
 	hide_chest_pick()
 	if choices.is_empty():
 		pass
@@ -182,6 +251,11 @@ func set_world_hint(text: String) -> void:
 		_hint_label.text = text
 
 
+func set_shop_status(text: String) -> void:
+	if _shop_status != null:
+		_shop_status.text = text
+
+
 func _threat_tier_color(tier_index: int) -> Color:
 	## Blue → amber → purple-gray (not red/green alone; text + bar length also encode state).
 	match clampi(tier_index, 0, 3):
@@ -193,6 +267,80 @@ func _threat_tier_color(tier_index: int) -> Color:
 			return Color(0.92, 0.58, 0.28, 1.0)  # deep amber pressure
 		_:
 			return Color(0.62, 0.52, 0.72, 1.0)  # purple-gray overwhelm
+
+
+func _rebuild_shop_shelf(shelf: Array, current_gold: int) -> void:
+	if _shop_list == null:
+		return
+	for child in _shop_list.get_children():
+		_shop_list.remove_child(child)
+		child.queue_free()
+	if shelf.is_empty():
+		var empty := Label.new()
+		empty.text = "货架空"
+		_shop_list.add_child(empty)
+		return
+	for i in shelf.size():
+		var slot: Dictionary = shelf[i]
+		var unit: UnitDefinition = slot.get("unit") as UnitDefinition
+		var price := int(slot.get("price", 0))
+		var sold := bool(slot.get("sold_out", false))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		var name_lbl := Label.new()
+		var unit_name := unit.display_name if unit != null else "?"
+		var rarity := unit.rarity_tier if unit != null else 1
+		name_lbl.text = "[%d] %s · R%d · %d达克特" % [i + 1, unit_name, rarity, price]
+		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(name_lbl)
+		var buy := Button.new()
+		buy.custom_minimum_size = Vector2(88, 36)
+		if sold:
+			buy.text = "已购"
+			buy.disabled = true
+		elif current_gold < price:
+			buy.text = "钱不够"
+			buy.disabled = true
+		else:
+			buy.text = "购买"
+			buy.disabled = false
+		var slot_i := i
+		buy.pressed.connect(func() -> void: shop_buy_pressed.emit(slot_i))
+		row.add_child(buy)
+		_shop_list.add_child(row)
+
+
+func _rebuild_shop_army(army_rows: Array) -> void:
+	if _shop_army_list == null:
+		return
+	for child in _shop_army_list.get_children():
+		_shop_army_list.remove_child(child)
+		child.queue_free()
+	var header := Label.new()
+	header.text = "军队（出售返还部分达克特）"
+	_shop_army_list.add_child(header)
+	if army_rows.is_empty():
+		var empty := Label.new()
+		empty.text = "无随从可售"
+		_shop_army_list.add_child(empty)
+		return
+	for i in army_rows.size():
+		var row_data: Dictionary = army_rows[i]
+		var name_str := str(row_data.get("name", "?"))
+		var refund := int(row_data.get("refund", 0))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		var lbl := Label.new()
+		lbl.text = "%s · 售 %+d" % [name_str, refund]
+		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(lbl)
+		var sell := Button.new()
+		sell.text = "出售"
+		sell.custom_minimum_size = Vector2(72, 32)
+		var idx := int(row_data.get("index", i))
+		sell.pressed.connect(func() -> void: shop_sell_pressed.emit(idx))
+		row.add_child(sell)
+		_shop_army_list.add_child(row)
 
 
 func _build_ui() -> void:
@@ -261,7 +409,7 @@ func _build_ui() -> void:
 	_gold_label.add_theme_font_size_override("font_size", 15)
 	_gold_label.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.1, 0.85))
 	_gold_label.add_theme_constant_override("outline_size", 2)
-	_gold_label.text = "达克特(占位): 0"
+	_gold_label.text = "达克特: 0"
 	_root.add_child(_gold_label)
 
 	_hint_label = Label.new()
@@ -310,17 +458,55 @@ func _build_ui() -> void:
 	_portal_btn.pressed.connect(func() -> void: portal_confirm_pressed.emit())
 	_cmd_row.add_child(_portal_btn)
 
-	# Legacy panels kept off-screen/hidden for API stability.
-	_shop_panel = _make_centered_panel(Vector2(340, 330))
+	# Phase B shop panel (interstitial).
+	_shop_panel = _make_centered_panel(Vector2(520, 560))
 	_shop_panel.visible = false
 	_root.add_child(_shop_panel)
+	var shop_scroll := ScrollContainer.new()
+	shop_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	shop_scroll.custom_minimum_size = Vector2(480, 520)
+	_shop_panel.add_child(shop_scroll)
 	var shop_v := VBoxContainer.new()
-	_shop_panel.add_child(shop_v)
-	var shop_title := Label.new()
-	shop_title.text = "商店（已停用）"
-	shop_v.add_child(shop_title)
+	shop_v.add_theme_constant_override("separation", 8)
+	shop_v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	shop_scroll.add_child(shop_v)
+	_shop_title = Label.new()
+	_shop_title.add_theme_font_size_override("font_size", 18)
+	_shop_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_shop_title.text = "招兵店"
+	shop_v.add_child(_shop_title)
+	_shop_status = Label.new()
+	_shop_status.add_theme_font_size_override("font_size", 13)
+	_shop_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_shop_status.text = "种类 0/6"
+	shop_v.add_child(_shop_status)
+	var shelf_header := Label.new()
+	shelf_header.text = "货架"
+	shop_v.add_child(shelf_header)
 	_shop_list = VBoxContainer.new()
+	_shop_list.add_theme_constant_override("separation", 6)
 	shop_v.add_child(_shop_list)
+	var action_row := HBoxContainer.new()
+	action_row.add_theme_constant_override("separation", 8)
+	shop_v.add_child(action_row)
+	_shop_refresh_btn = Button.new()
+	_shop_refresh_btn.text = "刷新"
+	_shop_refresh_btn.custom_minimum_size = Vector2(140, 40)
+	_shop_refresh_btn.pressed.connect(func() -> void: shop_refresh_pressed.emit())
+	action_row.add_child(_shop_refresh_btn)
+	_shop_upgrade_btn = Button.new()
+	_shop_upgrade_btn.text = "招募等级"
+	_shop_upgrade_btn.custom_minimum_size = Vector2(200, 40)
+	_shop_upgrade_btn.pressed.connect(func() -> void: shop_upgrade_pressed.emit())
+	action_row.add_child(_shop_upgrade_btn)
+	_shop_army_list = VBoxContainer.new()
+	_shop_army_list.add_theme_constant_override("separation", 4)
+	shop_v.add_child(_shop_army_list)
+	_shop_next_btn = Button.new()
+	_shop_next_btn.text = "下一层"
+	_shop_next_btn.custom_minimum_size = Vector2(0, 48)
+	_shop_next_btn.pressed.connect(func() -> void: next_floor_pressed.emit())
+	shop_v.add_child(_shop_next_btn)
 
 	_chest_panel = _make_centered_panel(Vector2(360, 220))
 	_chest_panel.visible = false
@@ -333,6 +519,7 @@ func _build_ui() -> void:
 	_chest_list = HBoxContainer.new()
 	chest_v.add_child(_chest_list)
 
+	# Legacy interstitial kept as fallback (hidden when shop opens).
 	_interstitial_panel = _make_centered_panel(Vector2(320, 220))
 	_interstitial_panel.visible = false
 	_root.add_child(_interstitial_panel)
@@ -343,7 +530,7 @@ func _build_ui() -> void:
 	_interstitial_label.add_theme_font_size_override("font_size", 20)
 	_interstitial_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_interstitial_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_interstitial_label.text = "层间营地（占位）"
+	_interstitial_label.text = "层间营地"
 	inter_v.add_child(_interstitial_label)
 	var next_btn := Button.new()
 	next_btn.text = "下一层"
@@ -376,8 +563,8 @@ func _make_centered_panel(min_size: Vector2) -> PanelContainer:
 	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	panel.offset_left = -min_size.x * 0.5
 	panel.offset_right = min_size.x * 0.5
-	panel.offset_top = -min_size.y * 0.5 - 40.0
-	panel.offset_bottom = min_size.y * 0.5 - 40.0
+	panel.offset_top = -min_size.y * 0.5 - 20.0
+	panel.offset_bottom = min_size.y * 0.5 - 20.0
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.08, 0.1, 0.14, 0.94)

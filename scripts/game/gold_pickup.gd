@@ -1,6 +1,6 @@
 class_name GoldPickup
 extends Area2D
-## World gold coin; captain must walk over to collect.
+## World ducat pickup (legacy class name GoldPickup); captain must walk over to collect.
 
 
 signal collected(amount: int)
@@ -39,12 +39,13 @@ func _ensure_visuals() -> void:
 		_visual.polygon = PackedVector2Array([
 			Vector2(0, -10), Vector2(10, 0), Vector2(0, 10), Vector2(-10, 0),
 		])
-		_visual.color = Color(0.95, 0.8, 0.2, 1.0)
+		# Ducat: warm coin with slightly deeper rim so it reads vs gold stub.
+		_visual.color = Color(0.92, 0.72, 0.18, 1.0)
 		add_child(_visual)
 	if _label == null:
 		_label = Label.new()
-		_label.text = "+%d" % amount
-		_label.position = Vector2(-14, -28)
+		_label.text = "+%d 达克特" % amount
+		_label.position = Vector2(-28, -28)
 		_label.add_theme_font_size_override("font_size", 12)
 		_label.add_theme_color_override("font_color", Color(1, 0.92, 0.4, 1))
 		var font: Font = UiFonts.get_font()
