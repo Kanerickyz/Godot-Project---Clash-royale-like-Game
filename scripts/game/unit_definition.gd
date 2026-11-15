@@ -14,3 +14,8 @@ extends Resource
 @export var sprite_scale: float = 0.22
 @export var gold_drop_min: int = 0
 @export var gold_drop_max: int = 0
+@export_group("Shop")
+## Shop shelf price in ducats. 0 = use ShopEconomyConfig rarity_prices[rarity_tier].
+@export var shop_price: int = 0
+## 1=common, 2=uncommon, 3=rare. Old resources default to 1.
+@export var rarity_tier: int = 1

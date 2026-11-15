@@ -1,6 +1,6 @@
 class_name GameController
 extends Node2D
-## Phase A floor loop: roam, auto army, threat clock, portal → interstitial → next floor.
+## Phase B: floor loop + ducat wallet + interstitial shop (buy/refresh/level/sell).
 
 
 enum RunPhase { FLOOR, INTERSTITIAL, GAME_OVER }
@@ -9,6 +9,7 @@ const CHEST_ENGAGE_RADIUS := 110.0
 const PATH_SPAWN_CFG := "res://resources/world/world_spawn.tres"
 const PATH_FLOOR_RUN := "res://resources/world/floor_run.tres"
 const PATH_THREAT := "res://resources/combat/threat_config.tres"
+const PATH_SHOP_ECONOMY := "res://resources/world/shop_economy.tres"
 
 var gold: int = 0
 var game_over: bool = false
@@ -22,6 +23,8 @@ var forced_move_vector: Vector2 = Vector2.ZERO
 var _rng := RandomNumberGenerator.new()
 var _spawn_cfg: WorldSpawnConfig
 var _floor_cfg: FloorRunConfig
+var _shop_cfg: ShopEconomyConfig
+var _shop: ShopService = ShopService.new()
 var _threat: ThreatClock = ThreatClock.new()
 var _map: RoguelikeMapGenerator
 var _ground_host: Node2D
@@ -40,6 +43,7 @@ var _chest_serial: int = 0
 var _occupied_spots: Array[Vector2] = []
 var _hitstop_active: bool = false
 var _hitstop_restore_scale: float = 1.0
+var _shop_status: String = ""
 
 var _assemble_cd: float = 0.0
 var _assemble_active_left: float = 0.0
@@ -54,7 +58,10 @@ func _ready() -> void:
 	_rng.randomize()
 	_spawn_cfg = _load_spawn_config()
 	_floor_cfg = _load_floor_run_config()
+	_shop_cfg = _load_shop_economy()
 	_threat.configure(_load_threat_config())
+	_init_shop_service()
+	gold = _shop_cfg.starting_ducats if _shop_cfg != null else 20
 	_build_world_shell()
 	_hud = GameHud.new()
 	_hud.name = "HUD"
@@ -65,8 +72,12 @@ func _ready() -> void:
 	_hud.rage_pressed.connect(_on_rage_pressed)
 	_hud.portal_confirm_pressed.connect(_on_portal_confirm_pressed)
 	_hud.next_floor_pressed.connect(_on_next_floor_pressed)
+	_hud.shop_buy_pressed.connect(_on_shop_buy)
+	_hud.shop_refresh_pressed.connect(_on_shop_refresh)
+	_hud.shop_upgrade_pressed.connect(_on_shop_upgrade)
+	_hud.shop_sell_pressed.connect(_on_shop_sell)
 	_start_floor(true)
-	_hud.set_world_hint("WASD/摇杆移动 · Q集合 · R怒意 · 靠近传送门确认进层")
+	_hud.set_world_hint("WASD/摇杆移动 · Q集合 · R怒意 · 靠近传送门进层间商店")
 
 
 func get_move_vector() -> Vector2:
@@ -135,6 +146,58 @@ func debug_advance_floor() -> void:
 	if run_phase != RunPhase.INTERSTITIAL or game_over:
 		return
 	_begin_next_floor()
+
+
+func get_ducats() -> int:
+	return gold
+
+
+func get_shop_service() -> ShopService:
+	return _shop
+
+
+func get_shop_economy() -> ShopEconomyConfig:
+	return _shop_cfg
+
+
+func get_follower_count() -> int:
+	return _followers.size()
+
+
+func get_army_type_ids() -> Array:
+	return _collect_owned_type_ids()
+
+
+func get_last_interest() -> int:
+	return _shop.last_interest if _shop != null else 0
+
+
+## Test helper: grant ducats without pickup.
+func debug_add_ducats(amount: int) -> void:
+	if amount == 0:
+		return
+	gold = maxi(0, gold + amount)
+	if _hud != null:
+		_hud.refresh_gold(gold)
+	if run_phase == RunPhase.INTERSTITIAL:
+		_refresh_shop_hud()
+
+
+## Test helpers for shop actions (same as HUD buttons).
+func debug_shop_buy(slot_index: int) -> Dictionary:
+	return _try_shop_buy(slot_index)
+
+
+func debug_shop_refresh() -> Dictionary:
+	return _try_shop_refresh()
+
+
+func debug_shop_upgrade() -> Dictionary:
+	return _try_shop_upgrade()
+
+
+func debug_shop_sell(follower_index: int) -> Dictionary:
+	return _try_shop_sell(follower_index)
 
 
 ## Brief global hitstop (real-time). Re-entrant calls while active are ignored.
@@ -307,8 +370,16 @@ func _enter_interstitial() -> void:
 	_assemble_active_left = 0.0
 	_rage_active_left = 0.0
 	_portal_holding = false
+	# Interest settles on current balance before shop opens.
+	var interest := 0
+	if _shop != null:
+		interest = _shop.settle_interest(gold)
+		gold += interest
+		_shop.roll_shelf(_rng)
+	_shop_status = "利息 +%d" % interest if interest >= 0 else ""
 	if _hud != null:
-		_hud.show_interstitial(floor_index)
+		_hud.refresh_gold(gold)
+		_refresh_shop_hud()
 
 
 func _on_next_floor_pressed() -> void:
@@ -736,6 +807,178 @@ func recruit_unit(def: UnitDefinition) -> void:
 	_followers.append(member)
 
 
+func _on_shop_buy(slot_index: int) -> void:
+	_try_shop_buy(slot_index)
+
+
+func _on_shop_refresh() -> void:
+	_try_shop_refresh()
+
+
+func _on_shop_upgrade() -> void:
+	_try_shop_upgrade()
+
+
+func _on_shop_sell(follower_index: int) -> void:
+	_try_shop_sell(follower_index)
+
+
+func _try_shop_buy(slot_index: int) -> Dictionary:
+	if run_phase != RunPhase.INTERSTITIAL or game_over or _shop == null:
+		return {"ok": false, "code": &"wrong_phase"}
+	var result := _shop.try_buy(slot_index, gold, _collect_owned_type_ids())
+	if not bool(result.get("ok", false)):
+		_shop_status = _shop_fail_message(StringName(str(result.get("code", &""))))
+		_refresh_shop_hud()
+		return result
+	var cost := int(result.get("cost", 0))
+	var unit: UnitDefinition = result.get("unit") as UnitDefinition
+	gold = maxi(0, gold - cost)
+	recruit_unit(unit)
+	_shop_status = "购入 %s (-%d)" % [
+		unit.display_name if unit != null else "?",
+		cost,
+	]
+	_refresh_shop_hud()
+	return result
+
+
+func _try_shop_refresh() -> Dictionary:
+	if run_phase != RunPhase.INTERSTITIAL or game_over or _shop == null:
+		return {"ok": false, "code": &"wrong_phase"}
+	var result := _shop.try_refresh(gold, _rng)
+	if not bool(result.get("ok", false)):
+		_shop_status = _shop_fail_message(StringName(str(result.get("code", &""))))
+		_refresh_shop_hud()
+		return result
+	var cost := int(result.get("cost", 0))
+	gold = maxi(0, gold - cost)
+	_shop_status = "货架已刷新 (-%d)" % cost
+	_refresh_shop_hud()
+	return result
+
+
+func _try_shop_upgrade() -> Dictionary:
+	if run_phase != RunPhase.INTERSTITIAL or game_over or _shop == null:
+		return {"ok": false, "code": &"wrong_phase"}
+	var result := _shop.try_upgrade_recruit(gold)
+	if not bool(result.get("ok", false)):
+		_shop_status = _shop_fail_message(StringName(str(result.get("code", &""))))
+		_refresh_shop_hud()
+		return result
+	var cost := int(result.get("cost", 0))
+	gold = maxi(0, gold - cost)
+	_shop_status = "招募等级 → Lv%d (-%d)" % [int(result.get("level", 1)), cost]
+	_refresh_shop_hud()
+	return result
+
+
+func _try_shop_sell(follower_index: int) -> Dictionary:
+	if run_phase != RunPhase.INTERSTITIAL or game_over:
+		return {"ok": false, "code": &"wrong_phase"}
+	if follower_index < 0 or follower_index >= _followers.size():
+		_shop_status = "无效单位"
+		_refresh_shop_hud()
+		return {"ok": false, "code": &"bad_index"}
+	var member := _followers[follower_index]
+	if member == null or not is_instance_valid(member):
+		_shop_status = "无效单位"
+		_refresh_shop_hud()
+		return {"ok": false, "code": &"bad_index"}
+	var def: UnitDefinition = member.definition
+	var refund := _shop.sell_refund(def) if _shop != null else 0
+	_followers.remove_at(follower_index)
+	if member.get_parent() != null:
+		member.get_parent().remove_child(member)
+	member.queue_free()
+	_reindex_followers()
+	gold += refund
+	_shop_status = "出售 +%d" % refund
+	_refresh_shop_hud()
+	return {"ok": true, "code": &"ok", "refund": refund}
+
+
+func _reindex_followers() -> void:
+	for i in _followers.size():
+		var m := _followers[i]
+		if m == null or not is_instance_valid(m):
+			continue
+		m.follow_index = i
+		m.name = "Ally_%d" % i
+
+
+func _collect_owned_type_ids() -> Array:
+	var ids: Array = []
+	for m in _followers:
+		if m == null or not is_instance_valid(m) or m.is_dead:
+			continue
+		if m.definition == null:
+			continue
+		ids.append(m.definition.id)
+	return ids
+
+
+func _army_rows_for_hud() -> Array:
+	var rows: Array = []
+	for i in _followers.size():
+		var m := _followers[i]
+		if m == null or not is_instance_valid(m):
+			continue
+		var def: UnitDefinition = m.definition
+		var name_str := def.display_name if def != null else "?"
+		var refund := _shop.sell_refund(def) if _shop != null else 0
+		rows.append({"index": i, "name": name_str, "refund": refund})
+	return rows
+
+
+func _refresh_shop_hud() -> void:
+	if _hud == null or _shop == null:
+		return
+	var type_cap := _shop_cfg.max_unit_types if _shop_cfg != null else 6
+	var type_count := _shop.count_unique_types(_collect_owned_type_ids())
+	_hud.show_shop_interstitial(
+		floor_index,
+		_shop.shelf,
+		gold,
+		_shop.get_refresh_cost(),
+		_shop.recruit_level,
+		_shop.get_upgrade_cost(),
+		_shop.last_interest,
+		_army_rows_for_hud(),
+		type_count,
+		type_cap,
+		_shop_status
+	)
+
+
+func _shop_fail_message(code: StringName) -> String:
+	match code:
+		ShopService.RESULT_NOT_ENOUGH:
+			return "达克特不足"
+		ShopService.RESULT_TYPE_CAP:
+			return "种类已达上限"
+		ShopService.RESULT_SOLD_OUT:
+			return "该槽已售出"
+		ShopService.RESULT_MAX_LEVEL:
+			return "招募等级已满"
+		ShopService.RESULT_BAD_SLOT:
+			return "无效货架槽"
+		ShopService.RESULT_NO_POOL:
+			return "兵池为空"
+		_:
+			return "无法完成操作"
+
+
+func _init_shop_service() -> void:
+	var pool: Array[UnitDefinition] = []
+	if _shop_cfg != null:
+		for path in _shop_cfg.pool_unit_paths:
+			var def := _load_unit(str(path))
+			if def != null:
+				pool.append(def)
+	_shop.configure(_shop_cfg, pool)
+
+
 func _count_alive_enemies() -> int:
 	if not is_inside_tree():
 		return 0
@@ -763,13 +1006,17 @@ func _count_alive_chests() -> int:
 
 
 func _on_chest_smashed(chest: RoamChest, placeholder_gold: int) -> void:
-	if game_over or placeholder_gold <= 0:
+	if game_over:
 		return
-	# Placeholder reward — not shop-driving economy.
+	var amount := placeholder_gold
+	if _shop_cfg != null:
+		amount = maxi(1, _shop_cfg.chest_ducats)
+	if amount <= 0:
+		return
 	var at := _captain.global_position if _captain != null else Vector2.ZERO
 	if chest != null and is_instance_valid(chest):
 		at = chest.global_position
-	_on_gold_dropped(placeholder_gold, at)
+	_on_gold_dropped(amount, at)
 
 
 func _on_gold_dropped(amount: int, at: Vector2) -> void:
@@ -844,6 +1091,14 @@ func _load_threat_config() -> ThreatConfig:
 		return (res as ThreatConfig).duplicate(true) as ThreatConfig
 	push_error("GameController: failed to load ThreatConfig %s" % PATH_THREAT)
 	return ThreatConfig.new()
+
+
+func _load_shop_economy() -> ShopEconomyConfig:
+	var res := load(PATH_SHOP_ECONOMY)
+	if res is ShopEconomyConfig:
+		return (res as ShopEconomyConfig).duplicate(true) as ShopEconomyConfig
+	push_error("GameController: failed to load ShopEconomyConfig %s" % PATH_SHOP_ECONOMY)
+	return ShopEconomyConfig.new()
 
 
 func _load_unit(path: String) -> UnitDefinition:

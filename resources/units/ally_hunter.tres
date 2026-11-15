@@ -16,3 +16,5 @@ sprite = ExtResource("2_tex")
 sprite_scale = 0.2
 gold_drop_min = 0
 gold_drop_max = 0
+shop_price = 6
+rarity_tier = 2
