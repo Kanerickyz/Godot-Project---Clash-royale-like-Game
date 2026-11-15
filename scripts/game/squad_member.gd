@@ -9,18 +9,42 @@ var follow_index: int = 0
 var follow_distance: float = 42.0
 var assemble_active: bool = false
 var assemble_follow_distance: float = 28.0
+## Unscaled base+rank definition for revive/merge roster (combat `definition` may be scaled).
+var roster_definition: UnitDefinition
 
 
 func configure_as_captain(def: UnitDefinition) -> void:
 	is_captain = true
+	roster_definition = def.duplicate(true) if def != null else null
 	setup(def, Team.ALLY)
 
 
-func configure_as_follower(def: UnitDefinition, captain: Node2D, index: int) -> void:
+func configure_as_follower(
+	def: UnitDefinition,
+	captain: Node2D,
+	index: int,
+	rank_stat_mult: float = 1.0
+) -> void:
 	is_captain = false
 	follow_target = captain
 	follow_index = index
-	setup(def, Team.ALLY)
+	roster_definition = def.duplicate(true) if def != null else null
+	var combat_def := def.duplicate(true) if def != null else null
+	if combat_def != null and rank_stat_mult != 1.0:
+		combat_def.max_hp = maxi(1, int(round(float(combat_def.max_hp) * rank_stat_mult)))
+		combat_def.attack_damage = maxi(
+			1, int(round(float(combat_def.attack_damage) * rank_stat_mult))
+		)
+	setup(combat_def, Team.ALLY)
+
+
+func take_damage(amount: int) -> void:
+	if is_captain and amount > 0 and not is_dead and is_inside_tree():
+		var gc := get_tree().get_first_node_in_group(&"game_controller")
+		if gc != null and gc.has_method("try_share_captain_damage"):
+			if bool(gc.call("try_share_captain_damage", amount)):
+				return
+	super.take_damage(amount)
 
 
 func set_assemble(active: bool, pull_distance: float = 28.0) -> void:

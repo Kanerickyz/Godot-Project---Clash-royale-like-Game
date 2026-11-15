@@ -1,6 +1,6 @@
 class_name GameHud
 extends CanvasLayer
-## Phase B HUD: threat/floor/ducats, interstitial shop (buy/refresh/level/sell), end screen.
+## Phase C HUD: threat/ducats/shop + revive queue (BL) + rank-aware army rows.
 
 
 signal shop_buy_pressed(slot_index: int)
@@ -28,6 +28,9 @@ var _threat_bar: ProgressBar
 var _threat_bar_fill: StyleBoxFlat
 var _floor_label: Label
 var _hint_label: Label
+var _revive_panel: PanelContainer
+var _revive_title: Label
+var _revive_list: VBoxContainer
 var _shop_panel: PanelContainer
 var _shop_title: Label
 var _shop_status: Label
@@ -256,6 +259,40 @@ func set_shop_status(text: String) -> void:
 		_shop_status.text = text
 
 
+func refresh_revive_queue(rows: Array) -> void:
+	if _revive_list == null:
+		return
+	for child in _revive_list.get_children():
+		_revive_list.remove_child(child)
+		child.queue_free()
+	if _revive_panel != null:
+		_revive_panel.visible = true
+	if _revive_title != null:
+		_revive_title.text = "复活队列 (%d)" % rows.size()
+	if rows.is_empty():
+		var empty := Label.new()
+		empty.text = "（空）"
+		empty.add_theme_font_size_override("font_size", 12)
+		_revive_list.add_child(empty)
+		return
+	for row_data in rows:
+		var info: Dictionary = row_data
+		var name_str := str(info.get("name", "?"))
+		var rank_lbl := str(info.get("rank_label", ""))
+		var rem := float(info.get("remaining", 0.0))
+		var kw := StringName(str(info.get("keyword", &"")))
+		var rank_i := int(info.get("rank", 0))
+		var line := "%s·%s  %.0fs" % [rank_lbl, name_str, ceil(rem)]
+		if rank_i >= 2 and kw != &"":
+			line = "%s·%s[%s]  %.0fs" % [rank_lbl, name_str, String(kw), ceil(rem)]
+		var lbl := Label.new()
+		lbl.text = line
+		lbl.add_theme_font_size_override("font_size", 12)
+		lbl.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.1, 0.85))
+		lbl.add_theme_constant_override("outline_size", 2)
+		_revive_list.add_child(lbl)
+
+
 func _threat_tier_color(tier_index: int) -> Color:
 	## Blue → amber → purple-gray (not red/green alone; text + bar length also encode state).
 	match clampi(tier_index, 0, 3):
@@ -428,6 +465,40 @@ func _build_ui() -> void:
 	_joystick = VirtualJoystick.new()
 	_joystick.name = "VirtualJoystick"
 	_root.add_child(_joystick)
+
+	# Phase C: revive queue, bottom-left (above command row / joystick).
+	_revive_panel = PanelContainer.new()
+	_revive_panel.name = "ReviveQueuePanel"
+	_revive_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_revive_panel.offset_left = 12
+	_revive_panel.offset_right = 260
+	_revive_panel.offset_top = -320
+	_revive_panel.offset_bottom = -220
+	_revive_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var revive_style := StyleBoxFlat.new()
+	revive_style.bg_color = Color(0.08, 0.1, 0.14, 0.82)
+	revive_style.border_color = Color(0.65, 0.72, 0.85, 0.9)
+	revive_style.set_border_width_all(1)
+	revive_style.set_content_margin_all(8)
+	revive_style.set_corner_radius_all(6)
+	_revive_panel.add_theme_stylebox_override("panel", revive_style)
+	_root.add_child(_revive_panel)
+	var revive_v := VBoxContainer.new()
+	revive_v.add_theme_constant_override("separation", 2)
+	_revive_panel.add_child(revive_v)
+	_revive_title = Label.new()
+	_revive_title.text = "复活队列 (0)"
+	_revive_title.add_theme_font_size_override("font_size", 13)
+	_revive_title.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.1, 0.9))
+	_revive_title.add_theme_constant_override("outline_size", 2)
+	revive_v.add_child(_revive_title)
+	_revive_list = VBoxContainer.new()
+	_revive_list.add_theme_constant_override("separation", 1)
+	revive_v.add_child(_revive_list)
+	var empty_q := Label.new()
+	empty_q.text = "（空）"
+	empty_q.add_theme_font_size_override("font_size", 12)
+	_revive_list.add_child(empty_q)
 
 	_cmd_row = HBoxContainer.new()
 	_cmd_row.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)

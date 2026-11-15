@@ -18,3 +18,5 @@ gold_drop_min = 0
 gold_drop_max = 0
 shop_price = 4
 rarity_tier = 1
+rank = 0
+keyword = &"先锋"

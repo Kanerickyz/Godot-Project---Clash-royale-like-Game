@@ -1,6 +1,6 @@
 class_name GameController
 extends Node2D
-## Phase B: floor loop + ducat wallet + interstitial shop (buy/refresh/level/sell).
+## Phase C: floor loop + shop + merge ranks + revive queue + captain damage share.
 
 
 enum RunPhase { FLOOR, INTERSTITIAL, GAME_OVER }
@@ -10,6 +10,7 @@ const PATH_SPAWN_CFG := "res://resources/world/world_spawn.tres"
 const PATH_FLOOR_RUN := "res://resources/world/floor_run.tres"
 const PATH_THREAT := "res://resources/combat/threat_config.tres"
 const PATH_SHOP_ECONOMY := "res://resources/world/shop_economy.tres"
+const PATH_MERGE_RANK := "res://resources/combat/merge_rank.tres"
 
 var gold: int = 0
 var game_over: bool = false
@@ -24,8 +25,10 @@ var _rng := RandomNumberGenerator.new()
 var _spawn_cfg: WorldSpawnConfig
 var _floor_cfg: FloorRunConfig
 var _shop_cfg: ShopEconomyConfig
+var _merge_cfg: MergeRankConfig
 var _shop: ShopService = ShopService.new()
 var _threat: ThreatClock = ThreatClock.new()
+var _revive_queue: ReviveQueue = ReviveQueue.new()
 var _map: RoguelikeMapGenerator
 var _ground_host: Node2D
 var _entities: Node2D
@@ -44,6 +47,8 @@ var _occupied_spots: Array[Vector2] = []
 var _hitstop_active: bool = false
 var _hitstop_restore_scale: float = 1.0
 var _shop_status: String = ""
+var _last_merge_log: String = ""
+var _merge_rebuild_guard: bool = false
 
 var _assemble_cd: float = 0.0
 var _assemble_active_left: float = 0.0
@@ -59,6 +64,7 @@ func _ready() -> void:
 	_spawn_cfg = _load_spawn_config()
 	_floor_cfg = _load_floor_run_config()
 	_shop_cfg = _load_shop_economy()
+	_merge_cfg = _load_merge_rank_config()
 	_threat.configure(_load_threat_config())
 	_init_shop_service()
 	gold = _shop_cfg.starting_ducats if _shop_cfg != null else 20
@@ -78,6 +84,7 @@ func _ready() -> void:
 	_hud.shop_sell_pressed.connect(_on_shop_sell)
 	_start_floor(true)
 	_hud.set_world_hint("WASD/摇杆移动 · Q集合 · R怒意 · 靠近传送门进层间商店")
+	_refresh_revive_hud()
 
 
 func get_move_vector() -> Vector2:
@@ -172,6 +179,56 @@ func get_last_interest() -> int:
 	return _shop.last_interest if _shop != null else 0
 
 
+func get_revive_queue_size() -> int:
+	return _revive_queue.size() if _revive_queue != null else 0
+
+
+func get_revive_queue_rows() -> Array:
+	return _revive_queue.get_hud_rows() if _revive_queue != null else []
+
+
+func get_last_merge_log() -> String:
+	return _last_merge_log
+
+
+func get_captain_hp() -> int:
+	if _captain == null or not is_instance_valid(_captain):
+		return 0
+	return _captain.current_hp
+
+
+func get_captain() -> SquadMember:
+	return _captain
+
+
+func get_merge_rank_config() -> MergeRankConfig:
+	return _merge_cfg
+
+
+func get_living_follower_hps() -> Array:
+	var out: Array = []
+	for m in _followers:
+		if m == null or not is_instance_valid(m) or m.is_dead:
+			continue
+		out.append(m.current_hp)
+	return out
+
+
+func get_army_roster_defs() -> Array:
+	## Living roster defs + queued (unscaled). For tests / oaths later.
+	var out: Array = []
+	for m in _followers:
+		if m == null or not is_instance_valid(m):
+			continue
+		var d := m.roster_definition if m.roster_definition != null else m.definition
+		if d != null:
+			out.append(d)
+	if _revive_queue != null:
+		for d2 in _revive_queue.get_defs():
+			out.append(d2)
+	return out
+
+
 ## Test helper: grant ducats without pickup.
 func debug_add_ducats(amount: int) -> void:
 	if amount == 0:
@@ -200,6 +257,66 @@ func debug_shop_sell(follower_index: int) -> Dictionary:
 	return _try_shop_sell(follower_index)
 
 
+## Test helper: recruit a unit definition (triggers auto-merge).
+func debug_recruit(def: UnitDefinition) -> void:
+	recruit_unit(def)
+
+
+## Test helper: kill living follower by index (enters revive queue).
+func debug_kill_follower(follower_index: int) -> bool:
+	if follower_index < 0 or follower_index >= _followers.size():
+		return false
+	var m := _followers[follower_index]
+	if m == null or not is_instance_valid(m) or m.is_dead:
+		return false
+	m.take_damage(maxi(1, m.current_hp))
+	return true
+
+
+## Test helper: advance revive timers without waiting real time.
+func debug_advance_revive(seconds: float) -> void:
+	_tick_revive_queue(maxf(0.0, seconds))
+
+
+## Test helper: apply damage through captain share hook.
+func debug_damage_captain(amount: int) -> void:
+	if _captain == null or not is_instance_valid(_captain):
+		return
+	_captain.take_damage(maxi(0, amount))
+
+
+## Captain damage share hook (called from SquadMember.take_damage).
+## Returns true if damage was fully redirected to living followers.
+func try_share_captain_damage(amount: int) -> bool:
+	if amount <= 0 or game_over:
+		return false
+	var living: Array[SquadMember] = []
+	for m in _followers:
+		if m == null or not is_instance_valid(m) or m.is_dead:
+			continue
+		living.append(m)
+	if living.is_empty():
+		return false
+	var n := living.size()
+	var each := int(amount / n)
+	var rem := int(amount % n)
+	for i in n:
+		var share := each + (1 if i < rem else 0)
+		if share > 0:
+			living[i].take_damage(share)
+	if _revive_queue != null and _merge_cfg != null:
+		_revive_queue.extend_all(_merge_cfg.share_extend())
+	_refresh_revive_hud()
+	if _captain != null and is_instance_valid(_captain) and _entities != null:
+		DamagePopup.spawn_text(
+			_entities,
+			_captain.global_position,
+			"分摊",
+			Color(0.85, 0.7, 0.95, 1.0)
+		)
+	return true
+
+
 ## Brief global hitstop (real-time). Re-entrant calls while active are ignored.
 func request_hitstop(duration: float = 0.1) -> void:
 	if _hitstop_active or duration <= 0.0 or not is_inside_tree():
@@ -224,6 +341,7 @@ func _process(delta: float) -> void:
 		_update_command_input()
 		_update_portal(delta)
 		_update_respawn(delta)
+		_tick_revive_queue(delta)
 	if _captain == null or not is_instance_valid(_captain):
 		return
 	if run_phase == RunPhase.FLOOR and not game_over:
@@ -437,11 +555,15 @@ func _clear_floor_entities(clear_army: bool) -> void:
 		for f in _followers:
 			if f != null and is_instance_valid(f) and not f.is_dead:
 				keep.append(f)
-	# Prune dead followers from roster.
+	# Phase C: dead followers enter revive queue (not permanent prune, except sell / run reset).
 	var alive_followers: Array[SquadMember] = []
 	for f in _followers:
-		if f != null and is_instance_valid(f) and not f.is_dead:
-			alive_followers.append(f)
+		if f == null or not is_instance_valid(f):
+			continue
+		if f.is_dead:
+			_enqueue_follower_def(_roster_def_of(f))
+			continue
+		alive_followers.append(f)
 	_followers = alive_followers
 	var children := _entities.get_children()
 	for child in children:
@@ -454,6 +576,9 @@ func _clear_floor_entities(clear_army: bool) -> void:
 	if clear_army:
 		_captain = null
 		_followers.clear()
+		if _revive_queue != null:
+			_revive_queue.clear()
+	_refresh_revive_hud()
 
 
 func _build_world_shell() -> void:
@@ -797,14 +922,146 @@ func spawn_hostile_minion(def: UnitDefinition, at: Vector2) -> Enemy:
 func recruit_unit(def: UnitDefinition) -> void:
 	if def == null or _captain == null:
 		return
+	_spawn_follower_from_roster(def.duplicate(true) as UnitDefinition)
+	_try_auto_merge()
+
+
+func _spawn_follower_from_roster(roster_def: UnitDefinition) -> SquadMember:
+	if roster_def == null or _captain == null or _entities == null:
+		return null
 	var member := SquadMember.new()
 	var index := _followers.size()
 	member.name = "Ally_%d" % index
-	member.configure_as_follower(def, _captain, index)
-	member.global_position = _captain.global_position + Vector2(30, 30)
+	var mult := 1.0
+	if _merge_cfg != null:
+		mult = _merge_cfg.multiplier_for_rank(int(roster_def.rank))
+	member.configure_as_follower(roster_def, _captain, index, mult)
+	var angle := float(index + 1) * TAU / 5.0
+	var radius := _merge_cfg.revive_spawn_radius if _merge_cfg != null else 48.0
+	member.global_position = _captain.global_position + Vector2(cos(angle), sin(angle)) * radius
 	member.combat_enabled = not ui_blocking and not game_over and run_phase == RunPhase.FLOOR
+	if not member.died.is_connected(_on_follower_died):
+		member.died.connect(_on_follower_died)
 	_entities.add_child(member)
 	_followers.append(member)
+	return member
+
+
+func _on_follower_died(who: Combatant) -> void:
+	var sm := who as SquadMember
+	if sm == null or sm.is_captain:
+		return
+	var roster := _roster_def_of(sm)
+	var idx := _followers.find(sm)
+	if idx >= 0:
+		_followers.remove_at(idx)
+		_reindex_followers()
+	_enqueue_follower_def(roster)
+	_refresh_revive_hud()
+
+
+func _roster_def_of(member: SquadMember) -> UnitDefinition:
+	if member == null:
+		return null
+	if member.roster_definition != null:
+		return member.roster_definition.duplicate(true) as UnitDefinition
+	if member.definition != null:
+		return member.definition.duplicate(true) as UnitDefinition
+	return null
+
+
+func _enqueue_follower_def(def: UnitDefinition) -> void:
+	if def == null or _revive_queue == null:
+		return
+	var sec := _merge_cfg.base_revive_time() if _merge_cfg != null else 8.0
+	_revive_queue.enqueue(def, sec)
+
+
+func _tick_revive_queue(delta: float) -> void:
+	if _revive_queue == null or game_over:
+		return
+	var ready := _revive_queue.tick(delta)
+	for def in ready:
+		_spawn_follower_from_roster(def)
+	if not ready.is_empty():
+		_try_auto_merge()
+		if _hud != null and not ready.is_empty():
+			var first: UnitDefinition = ready[0]
+			var msg := "复活 %s" % (first.display_name if first != null else "随从")
+			_hud.set_world_hint(msg)
+	_refresh_revive_hud()
+
+
+func _try_auto_merge() -> void:
+	if _merge_rebuild_guard or _captain == null:
+		return
+	var living_defs: Array = []
+	for m in _followers:
+		if m == null or not is_instance_valid(m) or m.is_dead:
+			continue
+		var d := _roster_def_of(m)
+		if d != null:
+			living_defs.append(d)
+	var queued_defs: Array = _revive_queue.get_defs() if _revive_queue != null else []
+	var result := UnitMergeService.auto_merge(living_defs, queued_defs)
+	var merges: Array = result.get("merges", [])
+	if merges.is_empty():
+		return
+	_merge_rebuild_guard = true
+	# Rebuild living followers from merge result.
+	var keep_nodes: Array[SquadMember] = _followers.duplicate()
+	_followers.clear()
+	for m in keep_nodes:
+		if m == null or not is_instance_valid(m):
+			continue
+		if m.died.is_connected(_on_follower_died):
+			m.died.disconnect(_on_follower_died)
+		if m.get_parent() != null:
+			m.get_parent().remove_child(m)
+		m.free()
+	if _revive_queue != null:
+		_revive_queue.clear()
+		for qd in result.get("queued", []):
+			var qdef := qd as UnitDefinition
+			if qdef != null:
+				_enqueue_follower_def(qdef)
+	for ld in result.get("living", []):
+		var ldef := ld as UnitDefinition
+		if ldef != null:
+			_spawn_follower_from_roster(ldef)
+	_merge_rebuild_guard = false
+	_emit_merge_feedback(merges)
+	_refresh_revive_hud()
+	if run_phase == RunPhase.INTERSTITIAL:
+		_refresh_shop_hud()
+
+
+func _emit_merge_feedback(merges: Array) -> void:
+	if merges.is_empty():
+		return
+	var parts: PackedStringArray = PackedStringArray()
+	for m in merges:
+		var info: Dictionary = m
+		var to_rank := int(info.get("to_rank", 0))
+		var name_str := str(info.get("name", "?"))
+		var label := UnitMergeService.rank_label(to_rank)
+		var kw := StringName(str(info.get("keyword", &"")))
+		var line := "合兵 → %s·%s" % [label, name_str]
+		if to_rank >= UnitMergeService.RANK_CHAMPION and kw != &"":
+			line += " [%s]" % String(kw)
+		parts.append(line)
+		print("PHASE_C_MERGE ", line)
+	_last_merge_log = " · ".join(parts)
+	_shop_status = _last_merge_log
+	if _hud != null:
+		_hud.set_world_hint(_last_merge_log)
+	if _captain != null and is_instance_valid(_captain) and _entities != null:
+		DamagePopup.spawn_text(
+			_entities,
+			_captain.global_position,
+			_last_merge_log,
+			Color(1.0, 0.88, 0.35, 1.0)
+		)
 
 
 func _on_shop_buy(slot_index: int) -> void:
@@ -908,27 +1165,53 @@ func _reindex_followers() -> void:
 
 
 func _collect_owned_type_ids() -> Array:
+	## Army roster domain: living + revive queue (queued still count for type cap / oaths).
 	var ids: Array = []
 	for m in _followers:
-		if m == null or not is_instance_valid(m) or m.is_dead:
+		if m == null or not is_instance_valid(m):
 			continue
-		if m.definition == null:
+		var d := _roster_def_of(m)
+		if d == null:
 			continue
-		ids.append(m.definition.id)
+		ids.append(d.id)
+	if _revive_queue != null:
+		for qd in _revive_queue.get_defs():
+			var qdef := qd as UnitDefinition
+			if qdef != null:
+				ids.append(qdef.id)
 	return ids
 
 
 func _army_rows_for_hud() -> Array:
+	## Shop sell list: living / on-field roster only (queued still belong to army but not sold here).
 	var rows: Array = []
 	for i in _followers.size():
 		var m := _followers[i]
-		if m == null or not is_instance_valid(m):
+		if m == null or not is_instance_valid(m) or m.is_dead:
 			continue
-		var def: UnitDefinition = m.definition
+		var def: UnitDefinition = _roster_def_of(m)
 		var name_str := def.display_name if def != null else "?"
+		var rank := int(def.rank) if def != null else 0
+		var rank_lbl := UnitMergeService.rank_label(rank)
+		var kw := def.keyword if def != null else &""
+		var label := "%s·%s" % [rank_lbl, name_str]
+		if rank >= UnitMergeService.RANK_CHAMPION and kw != &"":
+			label += " [%s]" % String(kw)
 		var refund := _shop.sell_refund(def) if _shop != null else 0
-		rows.append({"index": i, "name": name_str, "refund": refund})
+		rows.append({
+			"index": i,
+			"name": label,
+			"refund": refund,
+			"rank": rank,
+			"keyword": kw,
+		})
 	return rows
+
+
+func _refresh_revive_hud() -> void:
+	if _hud == null:
+		return
+	_hud.refresh_revive_queue(get_revive_queue_rows())
 
 
 func _refresh_shop_hud() -> void:
@@ -1099,6 +1382,14 @@ func _load_shop_economy() -> ShopEconomyConfig:
 		return (res as ShopEconomyConfig).duplicate(true) as ShopEconomyConfig
 	push_error("GameController: failed to load ShopEconomyConfig %s" % PATH_SHOP_ECONOMY)
 	return ShopEconomyConfig.new()
+
+
+func _load_merge_rank_config() -> MergeRankConfig:
+	var res := load(PATH_MERGE_RANK)
+	if res is MergeRankConfig:
+		return (res as MergeRankConfig).duplicate(true) as MergeRankConfig
+	push_error("GameController: failed to load MergeRankConfig %s" % PATH_MERGE_RANK)
+	return MergeRankConfig.new()
 
 
 func _load_unit(path: String) -> UnitDefinition:

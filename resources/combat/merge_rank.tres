@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="MergeRankConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/merge_rank_config.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+rank_stat_multipliers = PackedFloat32Array(1, 1.35, 1.75)
+revive_base_sec = 8.0
+share_queue_extend_sec = 1.5
+revive_spawn_radius = 48.0
