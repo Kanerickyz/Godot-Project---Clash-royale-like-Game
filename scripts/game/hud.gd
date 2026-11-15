@@ -1,6 +1,6 @@
 class_name GameHud
 extends CanvasLayer
-## Phase E HUD: dual currency + relic bar/shop + shrine choice; keeps A–D panels.
+## Phase G HUD: character select + skill tree + settlement skill points; keeps A–F panels.
 
 
 signal shop_buy_pressed(slot_index: int)
@@ -19,6 +19,10 @@ signal assemble_pressed
 signal rage_pressed
 signal portal_confirm_pressed
 signal next_floor_pressed
+signal character_confirm_pressed(character_id: StringName)
+signal character_row_pressed(character_id: StringName)
+signal skill_buy_pressed(node_id: StringName)
+signal meta_panel_open_pressed
 
 ## Presentation range for threat bar fill (matches ThreatConfig defaults; not a formula change).
 const THREAT_BAR_MIN := 1.0
@@ -71,6 +75,17 @@ var _rage_btn: Button
 var _portal_btn: Button
 var _shrine_btn: Button
 var _joystick: VirtualJoystick
+var _meta_summary_label: Label
+var _meta_open_btn: Button
+var _character_panel: PanelContainer
+var _character_title: Label
+var _character_status: Label
+var _character_list: VBoxContainer
+var _skill_list: VBoxContainer
+var _character_confirm_btn: Button
+var _character_close_btn: Button
+var _pending_character_id: StringName = &""
+var _character_gate_mode: bool = false
 
 
 func _ready() -> void:
@@ -317,6 +332,9 @@ func show_end(won: bool, stats: Dictionary = {}) -> void:
 		var ducats := int(stats.get("ducats", 0))
 		var corpus_amt := int(stats.get("corpus", 0))
 		var dungeon := str(stats.get("dungeon_label", ""))
+		var awarded := int(stats.get("awarded_skill_points", 0))
+		var sp_bal := int(stats.get("skill_points", 0))
+		var char_id := str(stats.get("selected_character_id", ""))
 		var floor_line := "层数：%d" % floors_reached
 		if total > 0:
 			floor_line = "层数：%d / %d" % [floors_reached, total]
@@ -324,9 +342,15 @@ func show_end(won: bool, stats: Dictionary = {}) -> void:
 			floor_line,
 			"达克特：%d" % ducats,
 			"尸骸：%d" % corpus_amt,
+			"技能点 +%d（余额 %d）" % [awarded, sp_bal],
 		])
 		if not dungeon.is_empty():
 			lines.append("地城：%s" % dungeon)
+		if not char_id.is_empty():
+			lines.append("角色：%s" % char_id)
+		var unlocks: Array = stats.get("new_unlocks", [])
+		if unlocks is Array and not unlocks.is_empty():
+			lines.append("新解锁：%s" % ", ".join(PackedStringArray(unlocks)))
 		_end_stats_label.text = "\n".join(lines)
 	if _end_panel != null:
 		_end_panel.visible = true
@@ -334,10 +358,141 @@ func show_end(won: bool, stats: Dictionary = {}) -> void:
 	hide_chest_pick()
 	hide_interstitial()
 	hide_shrine_choice()
+	hide_character_select()
 	if _cmd_row != null:
 		_cmd_row.visible = false
 	set_portal_prompt_visible(false)
 	set_shrine_prompt_visible(false)
+
+
+func refresh_meta_summary(skill_points: int, character_id: String, characters: Array = []) -> void:
+	if _meta_summary_label != null:
+		var name_str := character_id if not character_id.is_empty() else "—"
+		for row in characters:
+			if typeof(row) != TYPE_DICTIONARY:
+				continue
+			if str(row.get("id", "")) == character_id:
+				name_str = str(row.get("display_name", character_id))
+				break
+		_meta_summary_label.text = "技能点:%d · %s" % [skill_points, name_str]
+
+
+func show_character_select(
+	characters: Array,
+	skill_nodes: Array,
+	skill_points: int,
+	gate_run_start: bool = true
+) -> void:
+	_character_gate_mode = gate_run_start
+	if _character_panel != null:
+		_character_panel.visible = true
+	if _character_title != null:
+		_character_title.text = "开局选角" if gate_run_start else "局外成长"
+	if _character_confirm_btn != null:
+		_character_confirm_btn.text = "出征" if gate_run_start else "选定（下局生效）"
+		_character_confirm_btn.visible = true
+	if _character_close_btn != null:
+		_character_close_btn.visible = not gate_run_start
+	refresh_character_select(characters, skill_nodes, skill_points, "")
+
+
+func refresh_character_select(
+	characters: Array,
+	skill_nodes: Array,
+	skill_points: int,
+	status_text: String = ""
+) -> void:
+	if _character_status != null:
+		if status_text.is_empty():
+			_character_status.text = "技能点余额：%d" % skill_points
+		else:
+			_character_status.text = "%s · 技能点：%d" % [status_text, skill_points]
+		_character_status.add_theme_color_override(
+			"font_color",
+			Color(1.0, 0.7, 0.55, 1.0) if not status_text.is_empty() else Color(0.82, 0.86, 0.92, 1.0)
+		)
+	if _character_list != null:
+		for child in _character_list.get_children():
+			_character_list.remove_child(child)
+			child.queue_free()
+		for row_data in characters:
+			if typeof(row_data) != TYPE_DICTIONARY:
+				continue
+			var info: Dictionary = row_data
+			var cid := StringName(str(info.get("id", "")))
+			var unlocked := bool(info.get("unlocked", false))
+			var selected := bool(info.get("selected", false))
+			if selected:
+				_pending_character_id = cid
+			var btn := Button.new()
+			var label := str(info.get("display_name", cid))
+			if unlocked:
+				btn.text = ("%s  ✓" % label) if selected else label
+			else:
+				# Lock reason always visible on the row (L3+).
+				btn.text = "%s  [锁定] %s" % [label, str(info.get("lock_reason", "未解锁"))]
+			btn.disabled = false
+			btn.custom_minimum_size = Vector2(0, 40)
+			btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			btn.pressed.connect(_on_character_row_pressed.bind(cid))
+			_character_list.add_child(btn)
+	if _skill_list != null:
+		for child in _skill_list.get_children():
+			_skill_list.remove_child(child)
+			child.queue_free()
+		var head := Label.new()
+		head.text = "技能树"
+		head.add_theme_font_size_override("font_size", 14)
+		_skill_list.add_child(head)
+		for node_data in skill_nodes:
+			if typeof(node_data) != TYPE_DICTIONARY:
+				continue
+			var node: Dictionary = node_data
+			var nid := StringName(str(node.get("id", "")))
+			var owned := bool(node.get("owned", false))
+			var can_buy := bool(node.get("can_buy", false))
+			var btn2 := Button.new()
+			var cost := int(node.get("cost", 0))
+			var title := str(node.get("display_name", nid))
+			if owned:
+				btn2.text = "%s  已购" % title
+				btn2.disabled = true
+			elif can_buy:
+				btn2.text = "%s  (%d点)" % [title, cost]
+				btn2.disabled = false
+				btn2.pressed.connect(func() -> void: skill_buy_pressed.emit(nid))
+			else:
+				btn2.text = "%s  [%s]" % [title, str(node.get("block_reason", "不可用"))]
+				btn2.disabled = true
+			btn2.custom_minimum_size = Vector2(0, 36)
+			btn2.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			_skill_list.add_child(btn2)
+
+
+func hide_character_select() -> void:
+	if _character_panel != null:
+		_character_panel.visible = false
+
+
+func is_character_select_visible() -> bool:
+	return _character_panel != null and _character_panel.visible
+
+
+func get_pending_character_id() -> StringName:
+	return _pending_character_id
+
+
+func set_pending_character_id(character_id: StringName) -> void:
+	_pending_character_id = character_id
+	if _character_confirm_btn != null:
+		_character_confirm_btn.disabled = character_id == &""
+
+
+func _on_character_row_pressed(character_id: StringName) -> void:
+	_pending_character_id = character_id
+	if _character_confirm_btn != null:
+		_character_confirm_btn.disabled = character_id == &""
+	character_row_pressed.emit(character_id)
 
 
 func set_world_hint(text: String) -> void:
@@ -720,6 +875,30 @@ func _build_ui() -> void:
 	_corpus_label.text = "尸骸: 0"
 	_root.add_child(_corpus_label)
 
+	_meta_summary_label = Label.new()
+	_meta_summary_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_meta_summary_label.offset_left = -360
+	_meta_summary_label.offset_right = -100
+	_meta_summary_label.offset_top = 86
+	_meta_summary_label.offset_bottom = 112
+	_meta_summary_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_meta_summary_label.add_theme_font_size_override("font_size", 14)
+	_meta_summary_label.add_theme_color_override("font_color", Color(0.75, 0.9, 0.82, 1.0))
+	_meta_summary_label.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.1, 0.85))
+	_meta_summary_label.add_theme_constant_override("outline_size", 2)
+	_meta_summary_label.text = "技能点:0"
+	_root.add_child(_meta_summary_label)
+
+	_meta_open_btn = Button.new()
+	_meta_open_btn.text = "成长"
+	_meta_open_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_meta_open_btn.offset_left = -96
+	_meta_open_btn.offset_right = -12
+	_meta_open_btn.offset_top = 82
+	_meta_open_btn.offset_bottom = 114
+	_meta_open_btn.pressed.connect(func() -> void: meta_panel_open_pressed.emit())
+	_root.add_child(_meta_open_btn)
+
 	_hint_label = Label.new()
 	_hint_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	_hint_label.offset_left = 16
@@ -1002,7 +1181,7 @@ func _build_ui() -> void:
 	next_btn.pressed.connect(func() -> void: next_floor_pressed.emit())
 	inter_v.add_child(next_btn)
 
-	_end_panel = _make_centered_panel(Vector2(340, 280))
+	_end_panel = _make_centered_panel(Vector2(360, 340))
 	_end_panel.visible = false
 	_root.add_child(_end_panel)
 	var end_v := VBoxContainer.new()
@@ -1029,6 +1208,54 @@ func _build_ui() -> void:
 	menu_btn.custom_minimum_size = Vector2(0, 44)
 	menu_btn.pressed.connect(func() -> void: main_menu_pressed.emit())
 	end_v.add_child(menu_btn)
+
+	# Phase G: character select + skill tree panel.
+	_character_panel = _make_centered_panel(Vector2(420, 460))
+	_character_panel.visible = false
+	_root.add_child(_character_panel)
+	var char_v := VBoxContainer.new()
+	char_v.add_theme_constant_override("separation", 8)
+	_character_panel.add_child(char_v)
+	_character_title = Label.new()
+	_character_title.text = "开局选角"
+	_character_title.add_theme_font_size_override("font_size", 22)
+	_character_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	char_v.add_child(_character_title)
+	_character_status = Label.new()
+	_character_status.text = "技能点余额：0"
+	_character_status.add_theme_font_size_override("font_size", 14)
+	_character_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_character_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	char_v.add_child(_character_status)
+	var char_scroll := ScrollContainer.new()
+	char_scroll.custom_minimum_size = Vector2(0, 120)
+	char_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	char_v.add_child(char_scroll)
+	_character_list = VBoxContainer.new()
+	_character_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_character_list.add_theme_constant_override("separation", 6)
+	char_scroll.add_child(_character_list)
+	var skill_scroll := ScrollContainer.new()
+	skill_scroll.custom_minimum_size = Vector2(0, 140)
+	skill_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	char_v.add_child(skill_scroll)
+	_skill_list = VBoxContainer.new()
+	_skill_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_skill_list.add_theme_constant_override("separation", 4)
+	skill_scroll.add_child(_skill_list)
+	_character_confirm_btn = Button.new()
+	_character_confirm_btn.text = "出征"
+	_character_confirm_btn.custom_minimum_size = Vector2(0, 44)
+	_character_confirm_btn.pressed.connect(
+		func() -> void: character_confirm_pressed.emit(_pending_character_id)
+	)
+	char_v.add_child(_character_confirm_btn)
+	_character_close_btn = Button.new()
+	_character_close_btn.text = "关闭"
+	_character_close_btn.custom_minimum_size = Vector2(0, 40)
+	_character_close_btn.visible = false
+	_character_close_btn.pressed.connect(func() -> void: hide_character_select())
+	char_v.add_child(_character_close_btn)
 
 
 func _make_centered_panel(min_size: Vector2) -> PanelContainer:

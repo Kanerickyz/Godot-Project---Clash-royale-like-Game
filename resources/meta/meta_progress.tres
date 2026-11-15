@@ -1,0 +1,69 @@
+[gd_resource type="Resource" script_class="MetaProgressConfig" load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/meta_progress_config.gd" id="1_cfg"]
+[ext_resource type="Script" path="res://scripts/game/meta_character_def.gd" id="2_char"]
+[ext_resource type="Script" path="res://scripts/game/meta_skill_node_def.gd" id="3_node"]
+
+[sub_resource type="Resource" id="char_warden"]
+script = ExtResource("2_char")
+id = &"warden"
+display_name = "守墓人"
+description = "均衡开局，默认解锁"
+unlocked_by_default = true
+unlock_id = &"char_warden"
+lock_reason = ""
+base_starting_hp_bonus = 0
+base_starting_ducats_bonus = 0
+
+[sub_resource type="Resource" id="char_iron"]
+script = ExtResource("2_char")
+id = &"iron_captain"
+display_name = "铁壁队长"
+description = "偏重生存；通关后解锁"
+unlocked_by_default = false
+unlock_id = &"clear_run"
+lock_reason = "通关任意地城后解锁"
+base_starting_hp_bonus = 15
+base_starting_ducats_bonus = 0
+
+[sub_resource type="Resource" id="node_hp1"]
+script = ExtResource("3_node")
+id = &"warden_hp_1"
+display_name = "韧骨 I"
+description = "开局指挥官生命 +10"
+cost = 1
+character_id = &"warden"
+requires = PackedStringArray()
+effect_kind = 0
+effect_value = 10.0
+
+[sub_resource type="Resource" id="node_ducats1"]
+script = ExtResource("3_node")
+id = &"warden_ducats_1"
+display_name = "窖藏 I"
+description = "开局达克特 +5"
+cost = 1
+character_id = &"warden"
+requires = PackedStringArray("warden_hp_1")
+effect_kind = 1
+effect_value = 5.0
+
+[sub_resource type="Resource" id="node_iron_hp"]
+script = ExtResource("3_node")
+id = &"iron_hp_1"
+display_name = "铁壁根骨"
+description = "开局指挥官生命 +20"
+cost = 2
+character_id = &"iron_captain"
+requires = PackedStringArray()
+effect_kind = 0
+effect_value = 20.0
+
+[resource]
+script = ExtResource("1_cfg")
+victory_skill_points = 3
+defeat_skill_points = 1
+save_file_name = "meta_progress.save"
+victory_unlock_id = &"clear_run"
+characters = [SubResource("char_warden"), SubResource("char_iron")]
+skill_nodes = [SubResource("node_hp1"), SubResource("node_ducats1"), SubResource("node_iron_hp")]

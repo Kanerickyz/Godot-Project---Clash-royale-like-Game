@@ -1,6 +1,6 @@
 class_name GameController
 extends Node2D
-## Phase F: multi-floor run + final boss win/lose settlement; builds on A–E.
+## Phase G: meta progress (skill points / unlocks / character pick) on F run loop.
 
 
 enum RunPhase { FLOOR, INTERSTITIAL, GAME_OVER }
@@ -13,6 +13,7 @@ const PATH_THREAT := "res://resources/combat/threat_config.tres"
 const PATH_SHOP_ECONOMY := "res://resources/world/shop_economy.tres"
 const PATH_MERGE_RANK := "res://resources/combat/merge_rank.tres"
 const PATH_CORPUS_RELICS := "res://resources/world/corpus_relics.tres"
+const PATH_META_PROGRESS := "res://resources/meta/meta_progress.tres"
 const PATH_OATH_IRON_WALL := "res://resources/oaths/oath_iron_wall.tres"
 const PATH_OATH_MYRIAD_BONES := "res://resources/oaths/oath_myriad_bones.tres"
 const PATH_OATH_TAUT_BOW := "res://resources/oaths/oath_taut_bow.tres"
@@ -29,6 +30,10 @@ var dungeon_type_label: String = "地下墓穴"
 
 ## Test/harness: when non-zero, overrides keyboard/joystick move input.
 var forced_move_vector: Vector2 = Vector2.ZERO
+## When true, skip opening character-select gate (runners set this implicitly via node name != Main).
+var meta_auto_start: bool = true
+## Optional override save path for tests (empty → config default under user://).
+var meta_save_path_override: String = ""
 
 var _rng := RandomNumberGenerator.new()
 var _spawn_cfg: WorldSpawnConfig
@@ -36,6 +41,8 @@ var _floor_cfg: FloorRunConfig
 var _shop_cfg: ShopEconomyConfig
 var _merge_cfg: MergeRankConfig
 var _corpus_cfg: CorpusRelicsConfig
+var _meta_cfg: MetaProgressConfig
+var _meta: MetaProgressService = MetaProgressService.new()
 var _shop: ShopService = ShopService.new()
 var _relics: RelicService = RelicService.new()
 var _threat: ThreatClock = ThreatClock.new()
@@ -66,6 +73,8 @@ var _relic_status: String = ""
 var _last_merge_log: String = ""
 var _merge_rebuild_guard: bool = false
 var _base_threat_ramp: float = 120.0
+var _run_started: bool = false
+var _awaiting_character_select: bool = false
 
 var _assemble_cd: float = 0.0
 var _assemble_active_left: float = 0.0
@@ -80,6 +89,9 @@ var _shrine_choice_open: bool = false
 func _ready() -> void:
 	add_to_group(&"game_controller")
 	_rng.randomize()
+	# Main scene node is named "Main" → require character select for L4 presentable flow.
+	if name == "Main":
+		meta_auto_start = false
 	_spawn_cfg = _load_spawn_config()
 	_floor_cfg = _load_floor_run_config()
 	_shop_cfg = _load_shop_economy()
@@ -88,6 +100,7 @@ func _ready() -> void:
 	_init_oath_service()
 	_init_shop_service()
 	_init_relic_service()
+	_init_meta_service()
 	gold = _shop_cfg.starting_ducats if _shop_cfg != null else 20
 	corpus = _corpus_cfg.starting_corpus if _corpus_cfg != null else 0
 	_build_world_shell()
@@ -110,7 +123,14 @@ func _ready() -> void:
 	_hud.relic_refresh_pressed.connect(_on_relic_refresh)
 	_hud.shrine_choice_pressed.connect(_on_shrine_choice)
 	_hud.shrine_interact_pressed.connect(_on_shrine_interact_pressed)
-	_start_floor(true)
+	_hud.character_confirm_pressed.connect(_on_character_confirm)
+	_hud.character_row_pressed.connect(_on_character_row)
+	_hud.skill_buy_pressed.connect(_on_skill_buy)
+	_hud.meta_panel_open_pressed.connect(_on_meta_panel_open)
+	if meta_auto_start:
+		_begin_run_with_character(_meta.preferred_character_id())
+	else:
+		_open_character_select(true)
 	_hud.set_world_hint("WASD/摇杆移动 · Q集合 · R怒意 · 靠近传送门/神龛")
 	_refresh_revive_hud()
 	_refresh_oaths()
@@ -118,7 +138,7 @@ func _ready() -> void:
 
 
 func get_move_vector() -> Vector2:
-	if ui_blocking or game_over or run_phase != RunPhase.FLOOR:
+	if ui_blocking or game_over or _awaiting_character_select or run_phase != RunPhase.FLOOR:
 		return Vector2.ZERO
 	if forced_move_vector != Vector2.ZERO:
 		var forced := forced_move_vector
@@ -178,7 +198,7 @@ func get_final_boss() -> Boss:
 
 
 func get_run_stats() -> Dictionary:
-	return {
+	var stats := {
 		"floors_reached": floor_index,
 		"floor_index": floor_index,
 		"total_floors": get_total_floors(),
@@ -188,7 +208,24 @@ func get_run_stats() -> Dictionary:
 		"dungeon_label": dungeon_type_label,
 		"outcome": run_outcome,
 		"won": run_outcome == RunOutcome.VICTORY,
+		"skill_points": _meta.skill_points if _meta != null else 0,
+		"awarded_skill_points": _meta.last_awarded_skill_points if _meta != null else 0,
+		"selected_character_id": String(_meta.selected_character_id) if _meta != null else "",
+		"new_unlocks": Array(_meta.last_new_unlocks) if _meta != null else [],
 	}
+	return stats
+
+
+func get_meta_service() -> MetaProgressService:
+	return _meta
+
+
+func get_selected_character_id() -> StringName:
+	return _meta.selected_character_id if _meta != null else &""
+
+
+func is_awaiting_character_select() -> bool:
+	return _awaiting_character_select
 
 
 func get_threat_multiplier() -> float:
@@ -240,6 +277,22 @@ func debug_kill_final_boss() -> bool:
 		return false
 	_final_boss.take_damage(_final_boss.current_hp + 9999)
 	return true
+
+
+## Test helper: force character select + start (also closes select gate).
+func debug_confirm_character(character_id: StringName) -> Dictionary:
+	return _begin_run_with_character(character_id)
+
+
+## Test helper: purchase a meta skill node and persist.
+func debug_purchase_skill(node_id: StringName) -> Dictionary:
+	if _meta == null:
+		return {"ok": false, "code": MetaProgressService.RESULT_UNKNOWN}
+	var result := _meta.try_purchase_node(node_id)
+	if bool(result.get("ok", false)):
+		_meta.save_to_disk()
+		_refresh_meta_hud()
+	return result
 
 
 ## Test helper: wipe living followers then lethal damage on captain → defeat.
@@ -915,6 +968,7 @@ func _spawn_captain() -> void:
 	_captain.died.connect(_on_captain_died)
 	_entities.add_child(_captain)
 	_camera_ctrl.bind_captain(_captain)
+	_apply_meta_captain_bonuses()
 
 
 func _spawn_starting_followers() -> void:
@@ -1999,8 +2053,12 @@ func _end_run(outcome: RunOutcome) -> void:
 	_set_combat_enabled(false)
 	_portal_holding = false
 	_shrine_choice_open = false
+	if _meta != null:
+		_meta.award_for_outcome(outcome == RunOutcome.VICTORY)
+		_meta.save_to_disk()
 	if _hud != null:
 		_hud.show_end(outcome == RunOutcome.VICTORY, get_run_stats())
+		_refresh_meta_hud()
 
 
 func _on_restart() -> void:
@@ -2010,6 +2068,174 @@ func _on_restart() -> void:
 func _on_main_menu() -> void:
 	# Single-scene prototype: reload main entry (presentation hook for a future menu).
 	get_tree().reload_current_scene()
+
+
+func _on_character_confirm(character_id: StringName) -> void:
+	var pick := character_id
+	if pick == &"" and _hud != null:
+		pick = _hud.get_pending_character_id()
+	if _awaiting_character_select or not _run_started:
+		_begin_run_with_character(pick)
+		return
+	# Mid-run: only persist preferred character for the next run.
+	if _meta == null:
+		return
+	var result := _meta.try_select_character(pick)
+	if bool(result.get("ok", false)):
+		_meta.save_to_disk()
+		if _hud != null:
+			_hud.hide_character_select()
+		_refresh_meta_hud()
+	elif _hud != null:
+		_hud.refresh_character_select(
+			_meta.list_characters(),
+			_meta.list_skill_nodes(pick),
+			_meta.skill_points,
+			str(result.get("lock_reason", "未解锁"))
+		)
+
+
+func _on_character_row(character_id: StringName) -> void:
+	if _meta == null or _hud == null:
+		return
+	# Preview skill tree for the highlighted character (no unlock bypass).
+	var status := ""
+	if not _meta.is_character_unlocked(character_id):
+		status = _meta.get_lock_reason(character_id)
+	_hud.refresh_character_select(
+		_meta.list_characters(),
+		_meta.list_skill_nodes(character_id),
+		_meta.skill_points,
+		status
+	)
+	# Keep pending highlight even if locked (confirm will reject).
+	_hud.set_pending_character_id(character_id)
+
+
+func _on_skill_buy(node_id: StringName) -> void:
+	if _meta == null:
+		return
+	var result := _meta.try_purchase_node(node_id)
+	if bool(result.get("ok", false)):
+		_meta.save_to_disk()
+	_refresh_meta_hud()
+	if _hud != null and (_awaiting_character_select or _hud.is_character_select_visible()):
+		var preview := _hud.get_pending_character_id()
+		if preview == &"":
+			preview = _meta.selected_character_id
+		var status := ""
+		if not bool(result.get("ok", false)):
+			status = str(result.get("code", "购买失败"))
+		_hud.refresh_character_select(
+			_meta.list_characters(),
+			_meta.list_skill_nodes(preview),
+			_meta.skill_points,
+			status
+		)
+
+
+func _on_meta_panel_open() -> void:
+	if game_over:
+		return
+	_open_character_select(false)
+
+
+func _init_meta_service() -> void:
+	_meta_cfg = _load_meta_progress_config()
+	var path := meta_save_path_override
+	_meta.configure(_meta_cfg, path)
+	_meta.load_from_disk()
+
+
+func _load_meta_progress_config() -> MetaProgressConfig:
+	var res := load(PATH_META_PROGRESS)
+	if res is MetaProgressConfig:
+		return (res as MetaProgressConfig).duplicate(true) as MetaProgressConfig
+	push_warning("GameController: missing meta_progress.tres, using code defaults")
+	return MetaProgressConfig.make_default()
+
+
+func _wants_character_select_gate() -> bool:
+	return not meta_auto_start
+
+
+func _open_character_select(gate_run_start: bool) -> void:
+	_awaiting_character_select = gate_run_start
+	if gate_run_start:
+		ui_blocking = true
+		_set_combat_enabled(false)
+	if _hud == null or _meta == null:
+		return
+	_hud.show_character_select(
+		_meta.list_characters(),
+		_meta.list_skill_nodes(_meta.preferred_character_id()),
+		_meta.skill_points,
+		gate_run_start
+	)
+
+
+func _begin_run_with_character(character_id: StringName) -> Dictionary:
+	if _meta == null:
+		return {"ok": false, "code": MetaProgressService.RESULT_UNKNOWN}
+	var pick_id := character_id
+	if pick_id == &"":
+		pick_id = _meta.preferred_character_id()
+	var result := _meta.try_select_character(pick_id)
+	if not bool(result.get("ok", false)):
+		# Keep gate open; surface lock reason in HUD.
+		if _hud != null:
+			_hud.refresh_character_select(
+				_meta.list_characters(),
+				_meta.list_skill_nodes(pick_id),
+				_meta.skill_points,
+				str(result.get("lock_reason", "未解锁"))
+			)
+		return result
+	_meta.save_to_disk()
+	_awaiting_character_select = false
+	if _hud != null:
+		_hud.hide_character_select()
+	_apply_meta_starting_bonuses()
+	if not _run_started:
+		_start_floor(true)
+		_run_started = true
+	else:
+		# Mid-session re-pick (from meta panel): apply ducat bonus delta only once per run start.
+		pass
+	ui_blocking = false
+	_set_combat_enabled(true)
+	_refresh_meta_hud()
+	return result
+
+
+func _apply_meta_starting_bonuses() -> void:
+	if _meta == null:
+		return
+	var base_ducats := _shop_cfg.starting_ducats if _shop_cfg != null else 20
+	gold = base_ducats + _meta.get_starting_ducats_bonus()
+	if _hud != null:
+		_hud.refresh_gold(gold)
+
+
+func _apply_meta_captain_bonuses() -> void:
+	if _meta == null or _captain == null or not is_instance_valid(_captain):
+		return
+	var bonus := _meta.get_starting_hp_bonus()
+	if bonus <= 0:
+		return
+	if _captain.definition != null:
+		_captain.definition.max_hp = maxi(1, _captain.definition.max_hp + bonus)
+	_captain.current_hp = maxi(_captain.current_hp, _captain.definition.max_hp if _captain.definition != null else _captain.current_hp + bonus)
+
+
+func _refresh_meta_hud() -> void:
+	if _hud == null or _meta == null:
+		return
+	_hud.refresh_meta_summary(
+		_meta.skill_points,
+		String(_meta.selected_character_id),
+		_meta.list_characters()
+	)
 
 
 func _refresh_threat_hud() -> void:
