@@ -17,4 +17,4 @@ recruit_level_min = 1
 recruit_level_max = 5
 recruit_upgrade_costs = PackedInt32Array(4, 6, 8, 10)
 rarity_weights_by_level = PackedInt32Array(80, 18, 2, 65, 28, 7, 50, 35, 15, 35, 40, 25, 20, 40, 40)
-pool_unit_paths = PackedStringArray("res://resources/units/ally_skeleton.tres", "res://resources/units/ally_spear.tres", "res://resources/units/ally_shield.tres", "res://resources/units/ally_axe.tres", "res://resources/units/ally_archer.tres", "res://resources/units/ally_hunter.tres", "res://resources/units/ally_musket.tres")
+pool_unit_paths = PackedStringArray("res://resources/units/ally_skeleton.tres", "res://resources/units/ally_shield.tres", "res://resources/units/ally_spear.tres", "res://resources/units/ally_axe.tres", "res://resources/units/ally_archer.tres", "res://resources/units/ally_crossbow.tres", "res://resources/units/ally_banner.tres", "res://resources/units/ally_wardrum.tres", "res://resources/units/ally_horsebow.tres", "res://resources/units/ally_ram.tres", "res://resources/units/ally_giant_knight.tres", "res://resources/units/ally_soulcaller.tres")

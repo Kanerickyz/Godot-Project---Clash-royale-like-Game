@@ -23,6 +23,10 @@ var combat_enabled: bool = true
 ## Temporary combat buffs (e.g. rage). Logic multipliers; presentation reads separately.
 var damage_multiplier: float = 1.0
 var speed_multiplier: float = 1.0
+## Phase D oaths: incoming damage scale (1=full, <1=DR). Outgoing AS separate from rage.
+var incoming_damage_multiplier: float = 1.0
+var oath_damage_multiplier: float = 1.0
+var oath_attack_interval_multiplier: float = 1.0
 
 var _attack_cd: float = 0.0
 var _stun_remaining: float = 0.0
@@ -66,10 +70,13 @@ func setup(def: UnitDefinition, p_team: Team) -> void:
 func take_damage(amount: int) -> void:
 	if is_dead or amount <= 0:
 		return
-	current_hp = maxi(0, current_hp - amount)
+	var applied := amount
+	if team == Team.ALLY and incoming_damage_multiplier != 1.0:
+		applied = maxi(1, int(round(float(amount) * maxf(0.05, incoming_damage_multiplier))))
+	current_hp = maxi(0, current_hp - applied)
 	_mark_in_combat()
-	damaged.emit(self, amount, current_hp)
-	DamagePopup.spawn(get_parent() if get_parent() else self, global_position, amount)
+	damaged.emit(self, applied, current_hp)
+	DamagePopup.spawn(get_parent() if get_parent() else self, global_position, applied)
 	_flash_hit()
 	_update_hp_bar()
 	if current_hp <= 0:
@@ -228,11 +235,20 @@ func _try_auto_attack() -> void:
 	if target == null:
 		return
 	if target.has_method("take_damage"):
-		var dmg := maxi(1, int(round(float(definition.attack_damage) * maxf(0.05, damage_multiplier))))
+		var dmg := maxi(
+			1,
+			int(
+				round(
+					float(definition.attack_damage)
+					* maxf(0.05, damage_multiplier)
+					* maxf(0.05, oath_damage_multiplier)
+				)
+			)
+		)
 		target.call("take_damage", dmg)
 	_mark_in_combat()
 	_play_attack_punch(target as Node2D)
-	_attack_cd = definition.attack_interval
+	_attack_cd = definition.attack_interval * maxf(0.05, oath_attack_interval_multiplier)
 
 
 func _find_attack_target() -> Node2D:

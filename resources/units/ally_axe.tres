@@ -6,7 +6,7 @@
 [resource]
 script = ExtResource("1_script")
 id = &"ally_axe"
-display_name = "斧手"
+display_name = "战斧手"
 max_hp = 80
 attack_damage = 12
 attack_interval = 0.95

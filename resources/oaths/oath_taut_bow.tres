@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="OathDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/oath_definition.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"taut_bow"
+display_name = "劲弦誓约"
+keyword = &"射术"
+thresholds = PackedInt32Array(2, 4)
+effect_kind = 2
+scope = 1
+tier_primary = PackedFloat32Array(0.15, 0.28)
+tier_secondary = PackedFloat32Array(0.1, 0.2)

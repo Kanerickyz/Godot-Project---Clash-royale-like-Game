@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="OathDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/oath_definition.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"myriad_bones"
+display_name = "万骨誓约"
+keyword = &"蜂群"
+thresholds = PackedInt32Array(2, 4)
+effect_kind = 1
+scope = 0
+tier_primary = PackedFloat32Array(0.2, 0.35)
+tier_secondary = PackedFloat32Array(0, 0)

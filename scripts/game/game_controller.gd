@@ -1,6 +1,6 @@
 class_name GameController
 extends Node2D
-## Phase C: floor loop + shop + merge ranks + revive queue + captain damage share.
+## Phase D: floor/shop/merge/revive + champion oaths (keyword bonds).
 
 
 enum RunPhase { FLOOR, INTERSTITIAL, GAME_OVER }
@@ -11,6 +11,9 @@ const PATH_FLOOR_RUN := "res://resources/world/floor_run.tres"
 const PATH_THREAT := "res://resources/combat/threat_config.tres"
 const PATH_SHOP_ECONOMY := "res://resources/world/shop_economy.tres"
 const PATH_MERGE_RANK := "res://resources/combat/merge_rank.tres"
+const PATH_OATH_IRON_WALL := "res://resources/oaths/oath_iron_wall.tres"
+const PATH_OATH_MYRIAD_BONES := "res://resources/oaths/oath_myriad_bones.tres"
+const PATH_OATH_TAUT_BOW := "res://resources/oaths/oath_taut_bow.tres"
 
 var gold: int = 0
 var game_over: bool = false
@@ -29,6 +32,7 @@ var _merge_cfg: MergeRankConfig
 var _shop: ShopService = ShopService.new()
 var _threat: ThreatClock = ThreatClock.new()
 var _revive_queue: ReviveQueue = ReviveQueue.new()
+var _oath_service: OathService = OathService.new()
 var _map: RoguelikeMapGenerator
 var _ground_host: Node2D
 var _entities: Node2D
@@ -66,6 +70,7 @@ func _ready() -> void:
 	_shop_cfg = _load_shop_economy()
 	_merge_cfg = _load_merge_rank_config()
 	_threat.configure(_load_threat_config())
+	_init_oath_service()
 	_init_shop_service()
 	gold = _shop_cfg.starting_ducats if _shop_cfg != null else 20
 	_build_world_shell()
@@ -85,6 +90,7 @@ func _ready() -> void:
 	_start_floor(true)
 	_hud.set_world_hint("WASD/摇杆移动 · Q集合 · R怒意 · 靠近传送门进层间商店")
 	_refresh_revive_hud()
+	_refresh_oaths()
 
 
 func get_move_vector() -> Vector2:
@@ -215,7 +221,7 @@ func get_living_follower_hps() -> Array:
 
 
 func get_army_roster_defs() -> Array:
-	## Living roster defs + queued (unscaled). For tests / oaths later.
+	## Living roster defs + queued (unscaled). Army domain for type cap / oaths.
 	var out: Array = []
 	for m in _followers:
 		if m == null or not is_instance_valid(m):
@@ -227,6 +233,50 @@ func get_army_roster_defs() -> Array:
 		for d2 in _revive_queue.get_defs():
 			out.append(d2)
 	return out
+
+
+func get_oath_service() -> OathService:
+	return _oath_service
+
+
+func get_oath_rows() -> Array:
+	return _oath_service.build_hud_rows(get_army_roster_defs()) if _oath_service != null else []
+
+
+func get_champion_keyword_count(keyword: StringName) -> int:
+	if _oath_service == null:
+		return 0
+	return _oath_service.count_for_keyword(get_army_roster_defs(), keyword)
+
+
+func get_oath_tier(oath_id: StringName) -> int:
+	if _oath_service == null:
+		return 0
+	return _oath_service.tier_for_id(oath_id, get_army_roster_defs())
+
+
+func get_oath_damage_taken_multiplier() -> float:
+	if _oath_service == null:
+		return 1.0
+	return _oath_service.damage_taken_multiplier(get_army_roster_defs())
+
+
+func get_oath_revive_time_multiplier() -> float:
+	if _oath_service == null:
+		return 1.0
+	return _oath_service.revive_time_multiplier(get_army_roster_defs())
+
+
+func get_oath_ranged_damage_multiplier() -> float:
+	if _oath_service == null:
+		return 1.0
+	return _oath_service.ranged_damage_multiplier(get_army_roster_defs())
+
+
+func get_oath_ranged_interval_multiplier() -> float:
+	if _oath_service == null:
+		return 1.0
+	return _oath_service.ranged_interval_multiplier(get_army_roster_defs())
 
 
 ## Test helper: grant ducats without pickup.
@@ -269,8 +319,11 @@ func debug_kill_follower(follower_index: int) -> bool:
 	var m := _followers[follower_index]
 	if m == null or not is_instance_valid(m) or m.is_dead:
 		return false
-	m.take_damage(maxi(1, m.current_hp))
-	return true
+	# Overcome incoming DR (oaths) so one call always kills.
+	var dr := maxf(0.05, m.incoming_damage_multiplier)
+	var need := int(ceil(float(m.current_hp) / dr)) + 1
+	m.take_damage(maxi(1, need))
+	return m.is_dead or not is_instance_valid(m) or _followers.find(m) < 0
 
 
 ## Test helper: advance revive timers without waiting real time.
@@ -924,6 +977,7 @@ func recruit_unit(def: UnitDefinition) -> void:
 		return
 	_spawn_follower_from_roster(def.duplicate(true) as UnitDefinition)
 	_try_auto_merge()
+	_refresh_oaths()
 
 
 func _spawn_follower_from_roster(roster_def: UnitDefinition) -> SquadMember:
@@ -958,6 +1012,7 @@ func _on_follower_died(who: Combatant) -> void:
 		_reindex_followers()
 	_enqueue_follower_def(roster)
 	_refresh_revive_hud()
+	_refresh_oaths()
 
 
 func _roster_def_of(member: SquadMember) -> UnitDefinition:
@@ -974,6 +1029,11 @@ func _enqueue_follower_def(def: UnitDefinition) -> void:
 	if def == null or _revive_queue == null:
 		return
 	var sec := _merge_cfg.base_revive_time() if _merge_cfg != null else 8.0
+	# Include the unit about to enter the queue so champion keywords still count.
+	var roster_for_oath := get_army_roster_defs()
+	roster_for_oath.append(def)
+	if _oath_service != null:
+		sec *= _oath_service.revive_time_multiplier(roster_for_oath)
 	_revive_queue.enqueue(def, sec)
 
 
@@ -985,7 +1045,8 @@ func _tick_revive_queue(delta: float) -> void:
 		_spawn_follower_from_roster(def)
 	if not ready.is_empty():
 		_try_auto_merge()
-		if _hud != null and not ready.is_empty():
+		_refresh_oaths()
+		if _hud != null:
 			var first: UnitDefinition = ready[0]
 			var msg := "复活 %s" % (first.display_name if first != null else "随从")
 			_hud.set_world_hint(msg)
@@ -1032,6 +1093,7 @@ func _try_auto_merge() -> void:
 	_merge_rebuild_guard = false
 	_emit_merge_feedback(merges)
 	_refresh_revive_hud()
+	_refresh_oaths()
 	if run_phase == RunPhase.INTERSTITIAL:
 		_refresh_shop_hud()
 
@@ -1151,6 +1213,7 @@ func _try_shop_sell(follower_index: int) -> Dictionary:
 	_reindex_followers()
 	gold += refund
 	_shop_status = "出售 +%d" % refund
+	_refresh_oaths()
 	_refresh_shop_hud()
 	return {"ok": true, "code": &"ok", "refund": refund}
 
@@ -1214,6 +1277,41 @@ func _refresh_revive_hud() -> void:
 	_hud.refresh_revive_queue(get_revive_queue_rows())
 
 
+func _refresh_oaths() -> void:
+	_apply_oath_effects_to_army()
+	if _hud == null:
+		return
+	_hud.refresh_oaths(get_oath_rows())
+
+
+func _apply_oath_effects_to_army() -> void:
+	if _oath_service == null:
+		return
+	var roster := get_army_roster_defs()
+	var dr := _oath_service.damage_taken_multiplier(roster)
+	var ranged_dmg := _oath_service.ranged_damage_multiplier(roster)
+	var ranged_iv := _oath_service.ranged_interval_multiplier(roster)
+	for m in _followers:
+		if m == null or not is_instance_valid(m) or m.is_dead:
+			continue
+		m.incoming_damage_multiplier = dr
+		var kw := &""
+		if m.roster_definition != null:
+			kw = m.roster_definition.keyword
+		elif m.definition != null:
+			kw = m.definition.keyword
+		if _oath_service.applies_ranged_to(kw) and kw == &"射术":
+			m.oath_damage_multiplier = ranged_dmg
+			m.oath_attack_interval_multiplier = ranged_iv
+		else:
+			m.oath_damage_multiplier = 1.0
+			m.oath_attack_interval_multiplier = 1.0
+	if _captain != null and is_instance_valid(_captain) and not _captain.is_dead:
+		_captain.incoming_damage_multiplier = dr
+		_captain.oath_damage_multiplier = 1.0
+		_captain.oath_attack_interval_multiplier = 1.0
+
+
 func _refresh_shop_hud() -> void:
 	if _hud == null or _shop == null:
 		return
@@ -1260,6 +1358,21 @@ func _init_shop_service() -> void:
 			if def != null:
 				pool.append(def)
 	_shop.configure(_shop_cfg, pool)
+
+
+func _init_oath_service() -> void:
+	var defs: Array[OathDefinition] = []
+	for path in [
+		PATH_OATH_IRON_WALL,
+		PATH_OATH_MYRIAD_BONES,
+		PATH_OATH_TAUT_BOW,
+	]:
+		var res := load(str(path))
+		if res is OathDefinition:
+			defs.append((res as OathDefinition).duplicate(true) as OathDefinition)
+		else:
+			push_error("GameController: failed to load OathDefinition %s" % path)
+	_oath_service.configure(defs)
 
 
 func _count_alive_enemies() -> int:

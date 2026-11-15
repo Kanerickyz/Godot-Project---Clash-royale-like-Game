@@ -6,7 +6,7 @@
 [resource]
 script = ExtResource("1_script")
 id = &"ally_spear"
-display_name = "枪兵"
+display_name = "长矛兵"
 max_hp = 70
 attack_damage = 8
 attack_interval = 0.75

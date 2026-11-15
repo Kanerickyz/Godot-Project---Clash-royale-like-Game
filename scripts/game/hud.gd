@@ -1,6 +1,6 @@
 class_name GameHud
 extends CanvasLayer
-## Phase C HUD: threat/ducats/shop + revive queue (BL) + rank-aware army rows.
+## Phase D HUD: threat/ducats/shop + revive + oath progress + rank-aware army.
 
 
 signal shop_buy_pressed(slot_index: int)
@@ -31,6 +31,9 @@ var _hint_label: Label
 var _revive_panel: PanelContainer
 var _revive_title: Label
 var _revive_list: VBoxContainer
+var _oath_panel: PanelContainer
+var _oath_title: Label
+var _oath_list: VBoxContainer
 var _shop_panel: PanelContainer
 var _shop_title: Label
 var _shop_status: Label
@@ -293,6 +296,48 @@ func refresh_revive_queue(rows: Array) -> void:
 		_revive_list.add_child(lbl)
 
 
+func refresh_oaths(rows: Array) -> void:
+	if _oath_list == null:
+		return
+	for child in _oath_list.get_children():
+		_oath_list.remove_child(child)
+		child.queue_free()
+	if _oath_panel != null:
+		_oath_panel.visible = true
+	var lit_n := 0
+	for row_data in rows:
+		if bool((row_data as Dictionary).get("lit", false)):
+			lit_n += 1
+	if _oath_title != null:
+		_oath_title.text = "誓约 (%d 点亮)" % lit_n
+	if rows.is_empty():
+		var empty := Label.new()
+		empty.text = "（无）"
+		empty.add_theme_font_size_override("font_size", 12)
+		_oath_list.add_child(empty)
+		return
+	for row_data in rows:
+		var info: Dictionary = row_data
+		var name_str := str(info.get("name", "?"))
+		var kw := String(info.get("keyword", ""))
+		var count := int(info.get("count", 0))
+		var tier := int(info.get("tier", 0))
+		var next_need := int(info.get("next_threshold", 2))
+		var lit := bool(info.get("lit", false))
+		var status := "熄灭" if not lit else ("T%d" % tier)
+		var line := "%s[%s] %s %d/%d" % [name_str, kw, status, count, next_need]
+		var lbl := Label.new()
+		lbl.text = line
+		lbl.add_theme_font_size_override("font_size", 12)
+		if lit:
+			lbl.add_theme_color_override("font_color", Color(0.95, 0.86, 0.45, 1.0))
+		else:
+			lbl.add_theme_color_override("font_color", Color(0.72, 0.76, 0.82, 1.0))
+		lbl.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.1, 0.85))
+		lbl.add_theme_constant_override("outline_size", 2)
+		_oath_list.add_child(lbl)
+
+
 func _threat_tier_color(tier_index: int) -> Color:
 	## Blue → amber → purple-gray (not red/green alone; text + bar length also encode state).
 	match clampi(tier_index, 0, 3):
@@ -499,6 +544,41 @@ func _build_ui() -> void:
 	empty_q.text = "（空）"
 	empty_q.add_theme_font_size_override("font_size", 12)
 	_revive_list.add_child(empty_q)
+
+	# Phase D: oath progress, top-right under floor/threat.
+	_oath_panel = PanelContainer.new()
+	_oath_panel.name = "OathPanel"
+	_oath_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_oath_panel.offset_left = -280
+	_oath_panel.offset_right = -12
+	_oath_panel.offset_top = 96
+	_oath_panel.offset_bottom = 210
+	_oath_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var oath_style := StyleBoxFlat.new()
+	oath_style.bg_color = Color(0.1, 0.09, 0.12, 0.84)
+	oath_style.border_color = Color(0.85, 0.72, 0.35, 0.95)
+	oath_style.set_border_width_all(1)
+	oath_style.set_content_margin_all(8)
+	oath_style.set_corner_radius_all(6)
+	_oath_panel.add_theme_stylebox_override("panel", oath_style)
+	_root.add_child(_oath_panel)
+	var oath_v := VBoxContainer.new()
+	oath_v.add_theme_constant_override("separation", 2)
+	_oath_panel.add_child(oath_v)
+	_oath_title = Label.new()
+	_oath_title.text = "誓约 (0 点亮)"
+	_oath_title.add_theme_font_size_override("font_size", 13)
+	_oath_title.add_theme_color_override("font_color", Color(0.95, 0.86, 0.45, 1.0))
+	_oath_title.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.1, 0.9))
+	_oath_title.add_theme_constant_override("outline_size", 2)
+	oath_v.add_child(_oath_title)
+	_oath_list = VBoxContainer.new()
+	_oath_list.add_theme_constant_override("separation", 1)
+	oath_v.add_child(_oath_list)
+	var empty_o := Label.new()
+	empty_o.text = "（无）"
+	empty_o.add_theme_font_size_override("font_size", 12)
+	_oath_list.add_child(empty_o)
 
 	_cmd_row = HBoxContainer.new()
 	_cmd_row.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)

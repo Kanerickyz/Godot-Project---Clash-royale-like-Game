@@ -6,7 +6,7 @@
 [resource]
 script = ExtResource("1_script")
 id = &"ally_shield"
-display_name = "盾卫"
+display_name = "持盾步兵"
 max_hp = 120
 attack_damage = 7
 attack_interval = 0.9
